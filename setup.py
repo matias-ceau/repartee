@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='repartee',
-    version='0.1.0',
+    version='0.1.1',
     author='Matias Ceau',
     author_email='matias@ceau.net',
     description='A CLI tool to interface with multiple AI APIs for prompt-response handling.',

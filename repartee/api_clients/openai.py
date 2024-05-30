@@ -57,13 +57,16 @@ class OpenAIAPIClient:
             If an error occurs during the API request.
         """
         try:
-            response = openai.Completion.create(
-                engine=model,
-                prompt=prompt,
+            response = openai.ChatCompletion.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ],
                 max_tokens=max_tokens,
                 temperature=temperature
             )
-            return response.choices[0].text.strip()
+            return response.choices[0].message['content'].strip()
         except Exception as e:
             return f"An error occurred: {e}"
 

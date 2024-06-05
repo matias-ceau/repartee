@@ -4,7 +4,7 @@ Repartee is a command-line interface (CLI) tool designed to interface with multi
 
 ## Core Functionality
 - Interface with multiple AI APIs (GPT-4o, GPT-4-turbo, GPT-3.5-turbo from OpenAI, Claude 3, Gemini 1.5, Perplexity).
-- Securely store API keys in environment variables.
+- Retrieve API keys from environment variables.
 - Configure API parameters such as max tokens and temperature.
 - Support YAML configuration files for settings.
 - Command-line argument parsing for API selection and prompt input.
@@ -24,9 +24,9 @@ repartee/
 │   ├── api_clients/
 │   │   ├── __init__.py
 │   │   ├── openai_api.py
-│   │   ├── claude3.py
-│   │   ├── gemini15.py
-│   │   └── perplexity.py
+│   │   ├── anthropic_api.py
+│   │   ├── google_api.py
+│   │   └── perplexity_api.py
 │   ├── prompt_handler.py
 │   ├── output_formatter.py
 │   ├── repl.py

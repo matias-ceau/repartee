@@ -1,2 +1,0 @@
-[console_scripts]
-repartee = repartee.cli:main

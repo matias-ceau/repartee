@@ -1,0 +1,203 @@
+{
+  "main": {
+    "id": "2c0c9417cf8cac1b",
+    "type": "split",
+    "children": [
+      {
+        "id": "20d0a13e6749e7f9",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "585ba440e9560274",
+            "type": "leaf",
+            "state": {
+              "type": "html-view",
+              "state": {
+                "file": "html/Question answering using embeddings-based search OpenAI Cookbook.html"
+              }
+            }
+          },
+          {
+            "id": "4c8061924fd7ac3a",
+            "type": "leaf",
+            "state": {
+              "type": "canvas",
+              "state": {
+                "file": "Project canvas.canvas",
+                "viewState": {
+                  "x": -50.338059460618524,
+                  "y": -253.61947705195337,
+                  "zoom": -1.1102230246251565e-16
+                }
+              }
+            }
+          },
+          {
+            "id": "62afe0e4e7bc9b01",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "model names and prices.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          }
+        ],
+        "currentTab": 2
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "c2e3e945fd5d0793",
+    "type": "split",
+    "children": [
+      {
+        "id": "a882d99e610ee81f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c25cc3d508f20dab",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "ad716a301c939d4e",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "3794dcce85b47d7d",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {}
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "79516bac0a917257",
+    "type": "split",
+    "children": [
+      {
+        "id": "75ee59264ed9a176",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "68980f844027ddd0",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "model names and prices.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "be01021835a4ac71",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "model names and prices.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "fd23831d4a035d66",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true
+              }
+            }
+          },
+          {
+            "id": "33995ff09c1629a7",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "model names and prices.md"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false
+    }
+  },
+  "active": "62afe0e4e7bc9b01",
+  "lastOpenFiles": [
+    "Project canvas.canvas",
+    "model names and prices.md",
+    "embedding.md",
+    "html/Embeddings - OpenAI API.html",
+    "html/Embeddings - OpenAI API_files/unnamed.png",
+    "html/Embeddings - OpenAI API_files/embeddings.html",
+    "html/Embeddings - OpenAI API_files/embeddings-tsne.png",
+    "html/Embeddings - OpenAI API_files/embeddings-cluster.png",
+    "html/Embeddings - OpenAI API_files/embeddings-boxplot.png",
+    "html/Embeddings - OpenAI API_files/dgkjq2bp",
+    "html/Embeddings - OpenAI API_files/main.1baba770.js",
+    "html/Embeddings - OpenAI API_files/embeddings_data/vendor.673ab43d.js",
+    "html/Embeddings - OpenAI API_files/main.078f57ea.css",
+    "html/Embeddings - OpenAI API_files/8690.8445c993.chunk.css",
+    "html/Embeddings - OpenAI API_files/embeddings-tsne.webp",
+    "html/Embeddings - OpenAI API_files/embeddings-cluster.webp",
+    "html/Embeddings - OpenAI API_files/css2.css",
+    "html/Embeddings - OpenAI API_files/embeddings-boxplot.webp",
+    "html/Embeddings - OpenAI API_files/embeddings_data/frame.f0145a92.js",
+    "html/Embeddings - OpenAI API_files/embeddings_data",
+    "Question answering using embeddings-based search OpenAI Cookbook_files/95656834_002.webp",
+    "Question answering using embeddings-based search OpenAI Cookbook_files/95656834.webp",
+    "Question answering using embeddings-based search OpenAI Cookbook_files/11911723_002.webp",
+    "prompts/pp_2024-05-27.md",
+    "prompts/pp_2024-06-05.md"
+  ]
+}

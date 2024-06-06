@@ -1,0 +1,11 @@
+{
+	"nodes":[
+		{"id":"851cd79894471e68","x":-680,"y":-640,"width":446,"height":440,"type":"group","label":"APIs"},
+		{"id":"77b4728dea4ab17b","x":-625,"y":-588,"width":250,"height":60,"type":"text","text":"openai_api"},
+		{"id":"5757566b90ea613c","x":-625,"y":-500,"width":250,"height":60,"type":"text","text":"google_api"},
+		{"id":"c46c13adf7d2ab49","x":-625,"y":-400,"width":250,"height":60,"type":"text","text":"anthropic_api"},
+		{"id":"c8c40aa943923e10","x":-625,"y":-280,"width":250,"height":60,"type":"text","text":"perplexity_api"},
+		{"id":"1b93c326fd9551f4","x":60,"y":-588,"width":140,"height":60,"type":"text","text":"cli.py"}
+	],
+	"edges":[]
+}

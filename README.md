@@ -77,3 +77,4 @@ repartee/
 - [ ] Write tests for output formatter
 - [ ] Write tests for REPL
 - [ ] Write tests for spending tracker
+ 

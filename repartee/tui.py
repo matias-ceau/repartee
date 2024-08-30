@@ -15,6 +15,7 @@ class ModeDisplay(Static):
 class TerminalGUIApp(App):
     """A Textual app that simulates a terminal-like interface with LLM integration."""
 
+    TITLE = "Repartee"
     CSS_PATH = "repartee.tcss"
     BINDINGS = [("ctrl+t", "toggle_mode", "Toggle Mode")]
 

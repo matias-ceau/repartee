@@ -1,4 +1,5 @@
 import asyncio
+import subprocess
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -11,15 +12,15 @@ class TerminalGUI:
     def __init__(self):
         self.console = Console()
         self.session = PromptSession()
-        self.is_terminal_mode = False
+        self.is_terminal_mode = True
 
     async def main(self):
         while True:
             with patch_stdout():
                 if self.is_terminal_mode:
-                    user_input = await self.session.prompt_async("Terminal> ")
+                    user_input = await self.session.prompt_async("$> ")
                 else:
-                    user_input = await self.session.prompt_async("Chat> ")
+                    user_input = await self.session.prompt_async("/> ")
 
             if user_input.lower() == "exit":
                 break
@@ -30,7 +31,11 @@ class TerminalGUI:
             else:
                 if self.is_terminal_mode:
                     # Handle terminal commands here
-                    self.console.print(f"Executing: {user_input}")
+                    process = subprocess.run(
+                        f"{user_input}", shell=True, capture_output=True
+                    )
+                    self.console.print(process.stdout)
+                    self.console.print(process.stdout.decode())
                 else:
                     # Send input to LLM app and get response
                     response = self.send_to_llm(user_input)

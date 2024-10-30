@@ -1,6 +1,6 @@
 # Repartee
 
-Repartee is a command-line interface (CLI) tool designed to interface with multiple AI APIs to handle various functionalities, including sending prompts and receiving responses from AI models. It tracks spending based on token usage and offers a flexible configuration system.
+Repartee is a conversational AI assistant that integrates multiple language models and retrieval techniques to provide intelligent and context-aware responses.
 
 ## Core Functionality
 - Interface with multiple AI APIs (GPT-4o, GPT-4-turbo, GPT-3.5-turbo from OpenAI, Claude 3, Gemini 1.5, Perplexity).
@@ -15,55 +15,38 @@ Repartee is a command-line interface (CLI) tool designed to interface with multi
 
 ## Project Structure
 ```
-repartee
-├── LICENSE
+repartee/
+│
+├── repartee/
+│   ├── __init__.py
+│   ├── cli.py
+│   ├── config.py
+│   ├── api_clients/
+│   │   ├── __init__.py
+│   │   ├── openai_api.py
+│   │   ├── anthropic_api.py
+│   │   ├── google_api.py
+│   │   └── perplexity_api.py
+│   ├── prompt_handler.py
+│   ├── output_formatter.py
+│   ├── repl.py
+│   ├── spending_tracker.py
+│   └── utils.py
+│
+├── tests/
+│   ├── __init__.py
+│   ├── test_cli.py
+│   ├── test_config.py
+│   ├── test_api_clients.py
+│   ├── test_prompt_handler.py
+│   ├── test_output_formatter.py
+│   ├── test_repl.py
+│   └── test_spending_tracker.py
+│
+├── .gitignore
 ├── README.md
-├── config
-│   └── settings.yaml
-├── dev
-│   ├── api.py
-│   ├── notes
-│   │   ├── Project canvas.canvas
-│   │   ├── embedding.md
-│   │   └── model names and prices.md
-│   ├── prompts
-│   │   ├── pp_2024-05-27.md
-│   │   ├── pp_2024-06-05.md
-│   │   └── project_file_o1.md
-│   ├── terminal-emulator-in-textual.py
-│   ├── terminal_gui.py
-│   ├── tui.py
-│   ├── tui2.py
-│   └── utils
-│       └── scrape.py
-├── src
-│   └── repartee
-│       ├── __init__.py
-│       ├── config.py
-│       ├── main.py
-│       ├── memory
-│       │   ├── __init__.py
-│       │   └── rag.py
-│       ├── models
-│       │   ├── __init__.py
-│       │   ├── anthropic_models.py
-│       │   ├── google_models.py
-│       │   ├── openai_models.py
-│       │   └── perplexity_models.py
-│       ├── prompts
-│       │   └── __init__.py
-│       ├── rag.py
-│       ├── tools
-│       │   └── __init__.py
-│       └── ui
-│           ├── __init__.py
-│           ├── cli.py
-│           ├── fzf_tui.py
-│           ├── repl.py
-│           └── textual_tui.py
-├── pyproject.toml
-├── requirements.txt
-└── uv.lock
+├── setup.py
+└── requirements.txt
 ```
 
 ## Key Components
@@ -94,4 +77,3 @@ repartee
 - [ ] Write tests for output formatter
 - [ ] Write tests for REPL
 - [ ] Write tests for spending tracker
- 

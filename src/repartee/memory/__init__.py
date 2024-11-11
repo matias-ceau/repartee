@@ -10,5 +10,7 @@ Usage:
 Import this module to access memory management functionalities for chat history and semantic memory.
 """
 
-from .short_term_memory import ShortTermMemory, LongTermMemory, EpisodicMemory
+from .short_term_memory import ShortTermMemory
 from .semantic_memory import SemanticMemory
+from .working_memory import WorkingMemory
+from .episodic_memory import EpisodicMemory

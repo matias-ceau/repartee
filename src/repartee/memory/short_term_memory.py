@@ -32,9 +32,3 @@ class ShortTermMemory:
         """
         # TODO: implement a compression method that first extracts important points from the chat history
         pass
-
-class EpisodicMemory:
-    pass
-
-class LongTermMemory:
-    pass

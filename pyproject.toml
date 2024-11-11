@@ -15,6 +15,7 @@ dependencies = [
     "attrs==24.2.0",
     "click==8.1.7",
     "frozenlist==1.4.1",
+    "google-generativeai>=0.8.3",
     "idna==3.7",
     "linkify-it-py==2.0.3",
     "litellm>=1.51.1",

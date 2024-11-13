@@ -5,6 +5,7 @@ Provides interfaces to communicate with OpenAI's API.
 """
 
 import os
+
 import openai
 
 
@@ -29,12 +30,3 @@ class OpenAIModel:
             max_tokens=max_tokens,
         )
         return response.choices[0]["message"]["content"]
-
-
-if __name__ == "__main__":
-    import sys
-
-    prompt = sys.argv[1] if len(sys.argv) > 1 else "Hello"
-    model = OpenAIModel()
-    response = model.send_message(prompt)
-    print(response)

@@ -4,9 +4,10 @@ Integration module for Google's language models.
 Facilitates interaction with Google's AI platforms.
 """
 
-import google.generativeai as genai
 import os
 from typing import Dict, List, Union
+
+import google.generativeai as genai
 
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
@@ -32,13 +33,3 @@ class GoogleModel:
 
 
 # TODO: make coherent with other models (priority = low)
-
-if __name__ == "__main__":
-    import sys
-
-    if len(sys.argv) < 2:
-        prompt = "Hello"
-    else:
-        prompt = sys.argv[1]
-    model = GoogleModel()
-    model.send(prompt)

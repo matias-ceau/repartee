@@ -1,6 +1,8 @@
 import os
-from dotenv import load_dotenv
+from argparse import Namespace
+
 import yaml
+from dotenv import load_dotenv
 
 """
 Configuration module for Repartee.
@@ -26,3 +28,12 @@ def get_api_key(key_name):
             return config.get(key_name)
 
     return None
+
+
+class ReparteeDefaults:
+    models = Namespace(
+        claude="claude-3-5-sonnet-20241022",
+        openai="gpt-4o",
+        gemini="gemini-1.5??",
+    )
+    system_prompt = "You are a helpful AI assistant."

@@ -45,3 +45,9 @@ repartee = "repartee:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "pip>=24.3.1",
+]

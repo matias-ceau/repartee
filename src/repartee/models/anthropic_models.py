@@ -6,7 +6,7 @@ Provides classes and methods to interact with Anthropic AI services.
 
 import anthropic
 
-from ...config import ReparteeDefaults as Defaults
+from ..config import ReparteeDefaults as Defaults
 
 
 class AnthropicModel:

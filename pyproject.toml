@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Matias Ceau", email = "matias@ceau.net" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "aiohappyeyeballs==2.3.7",
     "aiohttp==3.10.4",
@@ -34,7 +34,6 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "requests>=2.32.3",
     "rich==13.7.1",
-    "sqlite3>=3.35.0",
     "tiktoken>=0.5.1",
     "textual-dev==1.5.1",
     "textual-terminal==0.3.0",

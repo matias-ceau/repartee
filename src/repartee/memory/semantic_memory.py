@@ -103,9 +103,10 @@ class KnowledgeGraph:
         Returns:
             Numpy array containing the embedding vector
         """
+        from ..config import config
         response = self.client.embeddings.create(
             input=text,
-            model="text-embedding-ada-002"
+            model=config.embeddings["model"]
         )
         return np.array(response.data[0].embedding)
     

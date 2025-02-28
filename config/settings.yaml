@@ -1,1 +1,25 @@
-# General settings and parameters
+# Repartee configuration file
+
+# Default models for each provider
+models:
+  openai: gpt-4o
+  anthropic: claude-3-5-sonnet-20241022
+  gemini: gemini-1.5-pro
+  perplexity: sonar-small-online
+
+# Default system prompt
+system_prompt: "You are a helpful AI assistant."
+
+# Data directory path (defaults to $XDG_DATA_HOME/repartee if not specified)
+# data_dir: ~/.local/share/repartee
+
+# Embedding configuration
+embeddings:
+  provider: openai
+  model: text-embedding-3-small
+
+# Knowledge directories (markdown files to import)
+# Uncomment and add paths to import knowledge
+# knowledge_dirs:
+#   - ~/Documents/obsidian/vault1
+#   - ~/Documents/knowledge_base

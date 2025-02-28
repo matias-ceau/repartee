@@ -1,34 +1,96 @@
+import json
 import tiktoken
+from datetime import datetime
 
 
 class ShortTermMemory:
-    def __init__(self, history: None, max_tokens: int = 5000):
-        self.history = [] if not history else history
-        self.tokens = (
-            0 if not history else len(tiktoken.tokenize("\n".join(self.history)))
-        )
+    """
+    Short-term memory management for conversation context.
+    
+    Maintains the most recent conversation history within a token limit,
+    providing efficient access to the current conversation context.
+    """
+    def __init__(self, max_tokens: int = 5000):
+        self.max_tokens = max_tokens
+        self.conversation_history = []
+        self.token_count = 0
+        self.encoding = tiktoken.get_encoding("cl100k_base")  # Compatible with most models
 
-    def add(self, message):
-        self.history.append(message)
-        self._check_tokens()
+    def add_user_message(self, message_text: str):
+        """Add a user message to the conversation history."""
+        message = {
+            "role": "user", 
+            "content": message_text,
+            "timestamp": datetime.now().isoformat()
+        }
+        self.conversation_history.append(message)
+        self._update_token_count()
+        return message
 
-    def _check_tokens(self):
-        self.tokens = len(tiktoken.tokenize("\n".join(self.history)))
-        if self.tokens > self.max_tokens:
-            self.compress()
+    def add_assistant_message(self, message_text: str):
+        """Add an assistant message to the conversation history."""
+        message = {
+            "role": "assistant", 
+            "content": message_text,
+            "timestamp": datetime.now().isoformat()
+        }
+        self.conversation_history.append(message)
+        self._update_token_count()
+        return message
+        
+    def add_system_message(self, message_text: str):
+        """Add a system message to the conversation history."""
+        message = {
+            "role": "system", 
+            "content": message_text,
+            "timestamp": datetime.now().isoformat()
+        }
+        # Insert system message at the beginning
+        self.conversation_history.insert(0, message) 
+        self._update_token_count()
+        return message
+
+    def _update_token_count(self):
+        """Update the token count and trim history if needed."""
+        # Approximate token count from conversation history
+        all_text = json.dumps(self.conversation_history)
+        self.token_count = len(self.encoding.encode(all_text))
+        
+        # If over max tokens, remove oldest messages (except system)
+        while self.token_count > self.max_tokens and len(self.conversation_history) > 1:
+            # Keep system messages at the beginning
+            for i, msg in enumerate(self.conversation_history):
+                if i > 0 and msg.get("role") != "system":  # Skip first message if it's system
+                    self.conversation_history.pop(i)
+                    break
+            
+            # Recalculate token count
+            all_text = json.dumps(self.conversation_history)
+            self.token_count = len(self.encoding.encode(all_text))
+
+    def get_messages_for_model(self):
+        """Return the conversation history formatted for model API calls."""
+        model_messages = []
+        for msg in self.conversation_history:
+            # Create a clean copy without timestamps for the API
+            model_messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+        return model_messages
+
+    def clear(self):
+        """Clear all conversation history except system messages."""
+        system_messages = [msg for msg in self.conversation_history if msg["role"] == "system"]
+        self.conversation_history = system_messages
+        self._update_token_count()
 
     def __str__(self):
-        return "\n".join(self.history)
-
-    def compress(self):
-        """
-        Compress the chat history by extracting important points.
-        This method performs the following steps:
-        1. Extracts key messages or points from the chat history.
-        2. Removes redundant or less important information.
-        3. Compiles the extracted points into a compressed format.
-        Returns:
-            None
-        """
-        # TODO: implement a compression method that first extracts important points from the chat history
-        pass
+        """Format conversation history as a readable string."""
+        output = []
+        for message in self.conversation_history:
+            role = message.get("role", "unknown")
+            content = message.get("content", "")
+            timestamp = message.get("timestamp", "")
+            output.append(f"[{timestamp}] {role.capitalize()}: {content}")
+        return "\n".join(output)

@@ -258,11 +258,9 @@ class CLI:
         return
 
 
-def main():
-    """Entry point for the CLI application."""
-    cli = CLI()
-    cli.run()
-    
-    
-if __name__ == "__main__":
+def main(argv: Optional[List[str]] = None) -> None:
+    """Public CLI entry point used by the console-script and ‑m switch."""
+    CLI().run(argv)
+
+if __name__ == "__main__":          # still allow direct execution
     main()

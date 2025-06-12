@@ -45,7 +45,8 @@ dependencies = [
 ]
 
 [project.scripts]
-repartee = "repartee.main:main"
+repartee = "repartee.ui.cli:main"
+repartee-chat = "repartee.ui.cli:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -42,7 +42,13 @@ dependencies = [
     "uc-micro-py==1.0.3",
     "wcwidth==0.2.13",
     "yarl==1.9.4",
+    "anyio>=4.4.0"
 ]
+
+[project.scripts]
+repartee = "repartee.ui.cli:main"
+repartee-chat = "repartee.ui.cli:main"
+repartee-mcp = "repartee.mcp_server:main"
 
 [project.scripts]
 repartee = "repartee.ui.cli:main"

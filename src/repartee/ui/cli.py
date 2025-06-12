@@ -11,7 +11,9 @@ import uuid
 import argparse
 from typing import Dict, List, Optional, Any
 
+import anyio
 from rich.console import Console
+from ..mcp.client import Client as MCPClient
 from rich.markdown import Markdown
 
 from ..config import get_api_key, ReparteeDefaults
@@ -38,6 +40,7 @@ class CLI:
         self.short_term_memory = ShortTermMemory()
         self.episodic_memory = EpisodicMemory()
         self.semantic_memory = SemanticMemory()
+        self.mcp = None
         
         # Default model settings
         self.current_model = None
@@ -183,12 +186,34 @@ class CLI:
         parser = argparse.ArgumentParser(description="Repartee: A conversational AI assistant")
         parser.add_argument("-m", "--model", help="Model to use (e.g., gpt-4, claude-3.5-sonnet)")
         parser.add_argument("-p", "--provider", default="openai", help="Provider (openai, anthropic)")
+        parser.add_argument("--mcp",
+                       help="connect to MCP host, e.g. tcp://127.0.0.1:55855")
         parser.add_argument("--import-obsidian", help="Import Obsidian vault from directory")
         parser.add_argument("--list-conversations", action="store_true", help="List recent conversations")
         parser.add_argument("prompt", nargs="*", help="Prompt for one-shot query")
         
         parsed_args = parser.parse_args(args)
         
+        # Handle MCP connection
+        if parsed_args.mcp:
+            self.mcp = MCPClient(parsed_args.mcp)
+
+            class RemoteShort:
+                def add_user_message(_, txt): anyio.run(self.mcp.call, "short.add_user", txt)
+                def add_assistant_message(_, txt): pass
+                def add_system_message(_, txt):   pass
+                def get_messages_for_model(_): return anyio.run(self.mcp.call, "short.get")
+
+            class RemoteEpisodic:
+                def add_message(_, **kw): anyio.run(self.mcp.call, "episodic.add",
+                                                    kw.get("role"), kw.get("content"),
+                                                    kw.get("conversation_id", "default"))
+                def search_similar(_, q, limit=3): return anyio.run(self.mcp.call,
+                                                                    "episodic.search", q, limit)
+
+            self.short_term_memory = RemoteShort()
+            self.episodic_memory = RemoteEpisodic()
+
         # Handle special commands
         if parsed_args.import_obsidian:
             try:

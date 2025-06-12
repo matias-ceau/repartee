@@ -14,3 +14,35 @@ from .short_term_memory import ShortTermMemory
 from .semantic_memory import SemanticMemory
 from .working_memory import WorkingMemory
 from .episodic_memory import EpisodicMemory
+
+# ---------- MCP host builder ----------
+from ..mcp.host import Host
+
+def build_host():
+    """Return a Host exposing memory operations via MCP."""
+    host = Host()
+
+    from .short_term_memory import ShortTermMemory
+    from .episodic_memory import EpisodicMemory
+
+    stm = ShortTermMemory()
+    epis = EpisodicMemory()
+
+    @host.on("short.add_user")
+    async def _su(msg):  # returns id ignored
+        stm.add_user_message(msg)
+
+    @host.on("short.get")
+    async def _sg():
+        return stm.get_messages_for_model()
+
+    @host.on("episodic.add")
+    async def _ea(role, content, conversation="default"):
+        epis.add_message(role=role, content=content,
+                         conversation_id=conversation)
+
+    @host.on("episodic.search")
+    async def _es(query, limit=3):
+        return epis.search_similar(query, limit)
+
+    return host

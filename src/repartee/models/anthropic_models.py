@@ -22,15 +22,21 @@ class AnthropicModel:
         prompt: str,
         system_prompt: str = "",
         max_tokens: int = 1024,
+        conversation_history: list = None
     ) -> str:
         response_text = ""
         system_prompt = system_prompt if system_prompt else Defaults.system_prompt
+        messages = []
+        
+        if conversation_history:
+            messages = conversation_history
+            
+        messages.append({"role": "user", "content": prompt})
+        
         with self.client.messages.stream(
             max_tokens=max_tokens,
             system=system_prompt,
-            messages=[
-                {"role": "user", "content": prompt},
-            ],
+            messages=messages,
             model=self.model_name,
         ) as stream:
             for text in stream.text_stream:

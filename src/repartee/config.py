@@ -103,7 +103,10 @@ class ReparteeConfig:
                     # Update configuration with user settings
                     if "models" in config:
                         for provider, model in config["models"].items():
-                            setattr(self.models, provider, model)
+                            if hasattr(self.models, provider):
+                                setattr(self.models, provider, model)
+                            else:
+                                print(f"Warning: Unknown model provider '{provider}' in config")
                             
                     if "system_prompt" in config:
                         self.system_prompt = config["system_prompt"]

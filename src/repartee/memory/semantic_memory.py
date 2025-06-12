@@ -104,11 +104,22 @@ class KnowledgeGraph:
             Numpy array containing the embedding vector
         """
         from ..config import config
-        response = self.client.embeddings.create(
-            input=text,
-            model=config.embeddings["model"]
-        )
-        return np.array(response.data[0].embedding)
+        
+        if config.embeddings["provider"] == "openai":
+            response = self.client.embeddings.create(
+                input=text,
+                model=config.embeddings["model"]
+            )
+            return np.array(response.data[0].embedding)
+            
+        elif config.embeddings["provider"] == "local":
+            # Example local model implementation
+            from sentence_transformers import SentenceTransformer
+            model = SentenceTransformer(config.embeddings["model"])
+            return model.encode(text, convert_to_numpy=True)
+            
+        else:
+            raise ValueError(f"Unsupported embedding provider: {config.embeddings['provider']}")
     
     def add_concept(self, 
                    name: str, 
@@ -390,8 +401,12 @@ class KnowledgeGraph:
         relations_added = 0
         
         folder = Path(folder_path)
-        if not folder.exists() or not folder.is_dir():
-            raise ValueError(f"Invalid Obsidian folder path: {folder_path}")
+        if not folder.exists():
+            raise FileNotFoundError(f"Obsidian folder not found: {folder_path}")
+        if not folder.is_dir():
+            raise NotADirectoryError(f"Path is not a directory: {folder_path}")
+        if not any(folder.glob("*.md")):
+            raise ValueError(f"No markdown files found in: {folder_path}")
         
         # Process markdown files recursively
         for md_file in folder.glob("**/*.md"):

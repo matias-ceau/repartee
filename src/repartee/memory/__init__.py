@@ -16,7 +16,13 @@ from .working_memory import WorkingMemory
 from .episodic_memory import EpisodicMemory
 
 # ---------- MCP host builder ----------
-from fastmcp import Host
+try:                                  # modern package layout
+    from mcp import Host
+except ImportError:                   # older fastmcp versions
+    try:
+        from fastmcp.host import Host
+    except ImportError:
+        from fastmcp import Host      # very old layout
 
 def build_host():
     """Return a Host exposing memory operations via MCP."""

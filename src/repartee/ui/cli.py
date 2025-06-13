@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Any
 
 import anyio
 from rich.console import Console
-from ..mcp.client import Client as MCPClient
+from fastmcp import Client as MCPClient
 from rich.markdown import Markdown
 
 from ..config import get_api_key, ReparteeDefaults

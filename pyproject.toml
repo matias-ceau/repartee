@@ -51,7 +51,7 @@ dependencies = [
 [project.scripts]
 repartee = "repartee.ui.cli:main"
 repartee-chat = "repartee.ui.cli:main"
-repartee-mcp = "repartee.mcp_server:main"
+repartee-mcp = "fastmcp.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

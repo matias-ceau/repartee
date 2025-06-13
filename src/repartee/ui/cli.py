@@ -13,7 +13,12 @@ from typing import Dict, List, Optional, Any
 
 import anyio
 from rich.console import Console
-from fastmcp import Client as MCPClient
+# Client side → use the “mcp” package (fastmcp only provides Host)
+try:
+    from mcp.client import Client as MCPClient          # preferred
+except ImportError:                                     # safety-net for dev envs
+    from repartee.mcp.client import Client as MCPClient # project’s old local stub
+
 from rich.markdown import Markdown
 
 from ..config import get_api_key, ReparteeDefaults

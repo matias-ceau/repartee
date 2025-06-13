@@ -17,7 +17,7 @@ from .episodic_memory import EpisodicMemory
 
 # ---------- MCP host builder ----------
 try:                                  # modern package layout
-    from mcp import Host
+    from mcp.host import Host
 except ImportError:                   # older fastmcp versions
     try:
         from fastmcp.host import Host

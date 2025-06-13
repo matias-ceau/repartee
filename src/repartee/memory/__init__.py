@@ -16,7 +16,7 @@ from .working_memory import WorkingMemory
 from .episodic_memory import EpisodicMemory
 
 # ---------- MCP host builder ----------
-from ..mcp.host import Host
+from fastmcp import Host
 
 def build_host():
     """Return a Host exposing memory operations via MCP."""

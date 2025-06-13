@@ -199,10 +199,10 @@ class CLI:
             self.mcp = MCPClient(parsed_args.mcp)
 
             class RemoteShort:
-                def add_user_message(_, txt): anyio.run(self.mcp.call, "short.add_user", txt)
-                def add_assistant_message(_, txt): pass
-                def add_system_message(_, txt):   pass
-                def get_messages_for_model(_): return anyio.run(self.mcp.call, "short.get")
+                def add_user_message(_, txt):      anyio.run(self.mcp.call, "short.add_user",     txt)
+                def add_assistant_message(_, txt): anyio.run(self.mcp.call, "short.add_assistant", txt)
+                def add_system_message(_, txt):    anyio.run(self.mcp.call, "short.add_system",    txt)
+                def get_messages_for_model(_):     return anyio.run(self.mcp.call, "short.get")
 
             class RemoteEpisodic:
                 def add_message(_, **kw): anyio.run(self.mcp.call, "episodic.add",

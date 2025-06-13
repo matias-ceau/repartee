@@ -36,6 +36,14 @@ def build_host():
     async def _sg():
         return stm.get_messages_for_model()
 
+    @host.on("short.add_assistant")
+    async def _sa(msg):
+        stm.add_assistant_message(msg)
+
+    @host.on("short.add_system")
+    async def _ss(msg):
+        stm.add_system_message(msg)
+
     @host.on("episodic.add")
     async def _ea(role, content, conversation="default"):
         epis.add_message(role=role, content=content,

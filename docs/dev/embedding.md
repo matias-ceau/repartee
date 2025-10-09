@@ -1,1 +1,0 @@
-See [[Question answering using embeddings-based search OpenAI Cookbook.html]] and [[Embeddings - OpenAI API.html]]

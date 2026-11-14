@@ -78,7 +78,7 @@ def bursts(items: Iterable[Item], *, gap: timedelta = BURST_GAP) -> list[list[It
         for item in msgs:
             if not item.is_self:
                 current = []
-            elif current and prev is current[-1] and _within(prev, item, gap, strict=True):
+            elif current and prev is current[-1] and within_gap(prev, item, gap, strict=True):
                 current.append(item)
             else:
                 current = [item]
@@ -87,7 +87,8 @@ def bursts(items: Iterable[Item], *, gap: timedelta = BURST_GAP) -> list[list[It
     return out
 
 
-def _within(a: Item, b: Item, gap: timedelta, *, strict: bool) -> bool:
+def within_gap(a: Item, b: Item, gap: timedelta, *, strict: bool) -> bool:
+    """True when b follows a within gap (strictly under it if strict); unknown times: not strict."""
     if a.timestamp is None or b.timestamp is None:
         return not strict
     delta = b.timestamp - a.timestamp

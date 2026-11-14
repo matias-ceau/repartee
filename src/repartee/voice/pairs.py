@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from datetime import timedelta
 
 from repartee.schema import Item, ReplyPair, stable_hash
-from repartee.voice.registers import _within, bursts, chat_order
+from repartee.voice.registers import bursts, chat_order, within_gap
 
 
 def mine_reply_pairs(items: Iterable[Item], *, max_context_messages: int = 4,
@@ -30,13 +30,13 @@ def mine_reply_pairs(items: Iterable[Item], *, max_context_messages: int = 4,
             if start == 0:
                 continue
             prev = msgs[start - 1]
-            if prev.is_self or prev.holdout or not _within(prev, burst[0], gap, strict=False):
+            if prev.is_self or prev.holdout or not within_gap(prev, burst[0], gap, strict=False):
                 continue
             context = [prev]
             j = start - 2
             while j >= 0 and len(context) < max_context_messages:
                 cand = msgs[j]
-                if cand.holdout or not _within(cand, context[0], gap, strict=False):
+                if cand.holdout or not within_gap(cand, context[0], gap, strict=False):
                     break
                 context.insert(0, cand)
                 j -= 1

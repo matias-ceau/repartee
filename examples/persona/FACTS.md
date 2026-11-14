@@ -26,6 +26,9 @@ other file in this folder agrees with this one; when in doubt, this file wins.
 - Vegetarian since **March 2019** (eats cheese and eggs, no fish).
 - Drinks tea, not coffee (genmaicha). Hates coriander.
 - Started therapy in **October 2020** and still goes, every other week.
+- Phones: an iPhone until June 2022, then an Android bought in Bristol, left
+  in English (US). Several exports in `sources/whatsapp/` were made by the
+  other person and sent to her, which is why their formats and languages differ.
 - Hobbies: **open-water swimming** (since April 2023, the marine lake at
   Clevedon, all year round), French crosswords, badly played piano.
 - Supports **FC Nantes**, because of her father.
@@ -47,6 +50,23 @@ other file in this folder agrees with this one; when in doubt, this file wins.
 | **Inès** | Goddaughter | Léa's daughter, born 12 August 2023. |
 | **Dr Benali** | Neurologist in Lyon | Diagnosed her migraine with aura (February 2020). |
 | **Mamie Jeanne** | Paternal grandmother | Lives in **Pornic** (seaside). Taught Camille to swim in the sea. 90 in August 2022. |
+
+Minor people: **Juliette** (Lyon friend, hosted her after the breakup),
+**Karim** (Léa's partner), **Lucía** (Mateo's wife), **Tony** (her manager at
+Cadence Streets), **Ruth** (in her team since 2025). Léa's birthday is **3 July**.
+
+## Health
+
+- **Migraine with aura** since her twenties; diagnosed February 2020 by Dr
+  Benali. Zigzag lines in her vision, then headache. Triggers: **lack of sleep
+  and red wine**. Treatment: **sumatriptan** at the first sign, a dark room.
+  About one a month in bad periods. Note: `Health/Migraine.md`.
+- **Iron deficiency**: November 2022 blood test, ferritin 9 µg/L (very low).
+  Ferrous sulphate for three months, taken away from tea. Back to 41 µg/L in
+  March 2023. Note: `Health/Iron.md`.
+- **Right knee**: MCL sprain (grade 2) from the dooring accident of 8 February
+  2024. Crutches for three weeks, physiotherapy until 17 May 2024. Note:
+  `Health/Knee.md`.
 
 ## Timeline 2019–2025
 
@@ -72,7 +92,9 @@ other file in this folder agrees with this one; when in doubt, this file wins.
 - **2025-01** Promoted to senior planner.
 - **2025-03-11** Father's hip replacement in Rennes; she stays a week.
 - **2025-06-01** Interview with the mirror about her childhood.
-- **2025-07-10 → 2025-07-14** Copenhagen reunion, ten years after Erasmus. Camille organised it and booked the flat in Nørrebro.
+- **2025-07-10 → 2025-07-14** Copenhagen reunion, ten years after Erasmus. Camille organised it and booked the flat in Nørrebro (about 210 euros each).
+- **2025-09** Three school-street projects at once; goes quiet for weeks.
+- **2025-10-04 → 2025-10-19** Elliot's exhibition "Imperfect Vessels" at Spike Island, Bristol.
 
 ## Stances
 
@@ -146,7 +168,7 @@ These are measurable and the chats follow them.
 
 ### English chat (`whatsapp.en`: Copenhagen crew, Sam)
 
-- **Capital letter at the start** of most messages (about four in five).
+- **Capital letter at the start** of almost every message (the opposite of her French).
 - **No final full stop** on most messages, but keeps the **French space before
   "?" and "!"**: `are you sure ?`.
 - Longer single messages (usually 7–14 words), fewer bursts than in French.
@@ -181,13 +203,13 @@ These are measurable and the chats follow them.
 
 - `sources/whatsapp/Léa Fontaine/_chat.txt` — iOS export from **Léa's** French
   iPhone (Camille appears as "Cam"), 2021–2025.
-- `sources/whatsapp/Copenhagen crew/_chat.txt` — iOS export from Camille's
+- `sources/whatsapp/Copenhagen crew/_chat.txt` — iOS export from **Priya's**
   iPhone set to English (UK), 2021–2025 (Camille appears as "Camille").
 - `sources/whatsapp/Discussion WhatsApp avec Maman.txt` — Android export from
   **Françoise's** French phone (Camille appears as "Camille"), 2021–2025.
 - `sources/whatsapp/WhatsApp Chat with Sam Whitaker.txt` — Android export from
-  Camille's work phone set to English (US), 12-hour clock, 2022–2025 (Camille
-  appears as "Camille Martin").
+  Camille's own phone (an Android bought in Bristol in June 2022, left on
+  English (US), 12-hour clock), 2022–2025 (Camille appears as "Camille Martin").
 - `sources/vault/` — Obsidian vault: notes, `Journal/`, `Essays/`, `Health/`.
 - `sources/tastes/` — music and books.
 - `interviews/2025-06-01-childhood.md` — interview transcript.

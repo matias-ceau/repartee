@@ -211,8 +211,8 @@ def test_describe_is_plain_and_skips_thin_metrics():
 
 
 def test_handles_empty_mixed_script_and_rtl_text():
-    texts = ["", "   ", "مرحبا، كيف حالك؟", "今日は良い天気ですね。散歩に行きましょう！", "😂😂👍🏽",
-             "ok", "Je suis à Tokyo 🗼, it's great", "ㅋㅋㅋ"]
+    texts = ["", "   ", "مرحبا، كيف حالك؟", "今日は良い天気ですね。散歩に行きましょう！",
+             "😂😂👍🏽", "ok", "Je suis à Tokyo 🗼, it's great", "ㅋㅋㅋ"]
     for form_register in ("whatsapp.xx", "essay.xx"):
         p = build_profile(form_register, texts, background=texts[2:])
         assert p.n_texts == 6

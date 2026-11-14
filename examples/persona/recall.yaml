@@ -1,0 +1,101 @@
+# Recall questions for the fictional persona. Paths are relative to this folder.
+# Each expected fact appears in at least one of the listed sources.
+- question: Where did I grow up, and until what age?
+  expected: ["Nantes", "until I was eleven"]
+  sources: [interviews/2025-06-01-childhood.md]
+
+- question: Why did my family move to Rennes, and when?
+  expected: ["summer 2004", "my mother got a post at a primary school in Rennes"]
+  sources: [interviews/2025-06-01-childhood.md]
+
+- question: How old was I when I started cycling to school alone, and on what bike?
+  expected: ["nine", "a red bike my father had repainted"]
+  sources: [interviews/2025-06-01-childhood.md, "sources/vault/Essays/Walking to school alone.md"]
+
+- question: Who taught me to swim, and where?
+  expected: ["Mamie Jeanne", "in the sea at Pornic"]
+  sources: [interviews/2025-06-01-childhood.md, "sources/vault/People/Mamie Jeanne.md"]
+
+- question: How did I meet Léa, and what does she do?
+  expected: ["at the lycée in Rennes in 2008", "she is a pharmacist in Nantes"]
+  sources: ["sources/vault/People/Léa Fontaine.md"]
+
+- question: When did I break up with Thomas, and who ended it?
+  expected: ["18 September 2021", "I ended it"]
+  sources: ["sources/whatsapp/Léa Fontaine/_chat.txt", sources/vault/Journal/2021-09-19.md]
+
+- question: How did I decide to accept the Bristol job?
+  expected: ["I made a pros and cons list that said no", "I decided while swimming", "I said yes on 15 March 2022"]
+  sources: [sources/vault/Journal/2022-03-09.md, sources/vault/Journal/2022-03-15.md, "sources/whatsapp/Copenhagen crew/_chat.txt"]
+
+- question: When did I move to Bristol and where was my first flat?
+  expected: ["June 2022", "Easton"]
+  sources: [sources/vault/Journal/2022-06-05.md, sources/vault/Bristol.md]
+
+- question: What did I think about shared e-scooters in 2021?
+  expected: ["I was against them", "I thought they replaced walking, not car trips", "they cluttered pavements"]
+  sources: ["sources/whatsapp/Léa Fontaine/_chat.txt", "sources/whatsapp/Copenhagen crew/_chat.txt"]
+
+- question: What do I think about shared e-scooters now, and what changed my mind?
+  expected: ["I support regulated, docked fleets with parking bays", "the Bristol trial data showed about a quarter of trips replaced car or taxi trips", "I changed my mind in November 2023"]
+  sources: ["sources/vault/Essays/What the scooter data told me.md", "sources/vault/Work/Bristol e-scooter trial.md", sources/vault/Journal/2023-11-20.md]
+
+- question: What did Jonas say when I admitted he was right about scooters?
+  expected: ["Told you."]
+  sources: ["sources/whatsapp/Copenhagen crew/_chat.txt", "sources/vault/Essays/What the scooter data told me.md"]
+
+- question: How and when did I meet Elliot, and what does he do?
+  expected: ["20 May 2023", "at a ceramics market in St Werburghs", "he is a ceramicist"]
+  sources: [sources/vault/Journal/2023-05-20.md, "sources/vault/People/Elliot Price.md"]
+
+- question: When did Elliot and I move in together, and where?
+  expected: ["5 October 2024", "Totterdown"]
+  sources: [sources/vault/Journal/2024-10-05.md, "sources/whatsapp/Discussion WhatsApp avec Maman.txt"]
+
+- question: Who is my goddaughter and when was she born?
+  expected: ["Inès, Léa's daughter", "12 August 2023"]
+  sources: ["sources/whatsapp/Léa Fontaine/_chat.txt", "sources/vault/People/Léa Fontaine.md"]
+
+- question: What happened to my knee in 2024?
+  expected: ["a car door opened in front of my bike on Cheltenham Road", "8 February 2024", "a sprained right knee (MCL)", "physiotherapy until May 2024"]
+  sources: [sources/vault/Health/Knee.md, sources/vault/Journal/2024-02-09.md]
+
+- question: What triggers my migraines and how do I treat them?
+  expected: ["lack of sleep", "red wine", "sumatriptan at the start of the aura"]
+  sources: [sources/vault/Health/Migraine.md]
+
+- question: What did my 2022 blood test show?
+  expected: ["low ferritin (iron deficiency)", "iron tablets for three months", "not to take them with tea"]
+  sources: [sources/vault/Health/Iron.md, "sources/whatsapp/Léa Fontaine/_chat.txt"]
+
+- question: Since when am I vegetarian, and why?
+  expected: ["since March 2019", "for climate reasons"]
+  sources: [sources/vault/Journal/2019-03-03.md]
+
+- question: What do my mother and I disagree about?
+  expected: ["nuclear power", "she is against it and I think it is necessary"]
+  sources: ["sources/whatsapp/Discussion WhatsApp avec Maman.txt"]
+
+- question: What surgery did my father have in 2025, and what did I do?
+  expected: ["a hip replacement on 11 March 2025 in Rennes", "I stayed in Rennes for a week and organised everything"]
+  sources: ["sources/whatsapp/Discussion WhatsApp avec Maman.txt", sources/vault/Journal/2025-03-16.md]
+
+- question: What is my brother's restaurant called and when did it open?
+  expected: ["La Petite Cale", "in Bordeaux", "September 2024"]
+  sources: ["sources/whatsapp/Discussion WhatsApp avec Maman.txt"]
+
+- question: Who is my favourite band, and which song do I play most?
+  expected: ["Big Thief", "Not"]
+  sources: [sources/tastes/music.csv, "sources/whatsapp/WhatsApp Chat with Sam Whitaker.txt"]
+
+- question: What is my favourite book, and which famous novel did I dislike?
+  expected: ["Invisible Cities by Italo Calvino", "Normal People by Sally Rooney"]
+  sources: [sources/tastes/books.md]
+
+- question: What do I think about working from home?
+  expected: ["three days in the office is right", "fully remote work isolates juniors"]
+  sources: ["sources/vault/Essays/The office is a street.md", "sources/whatsapp/WhatsApp Chat with Sam Whitaker.txt"]
+
+- question: What did I organise for the Copenhagen friends in 2025?
+  expected: ["a reunion ten years after Erasmus", "10 to 14 July 2025", "a flat in Nørrebro"]
+  sources: ["sources/vault/Projects/Copenhagen 2025.md", "sources/whatsapp/Copenhagen crew/_chat.txt"]

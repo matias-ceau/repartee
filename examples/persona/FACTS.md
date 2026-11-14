@@ -7,8 +7,15 @@ other file in this folder agrees with this one; when in doubt, this file wins.
 ## Biography
 
 - Born **14 May 1993** in **Nantes**, France. Lived there until she was eleven.
+  A small house near the Erdre. Red bike for Christmas at six (second-hand,
+  repainted by her father); cycled to school alone from nine, with one crossing
+  kept by a lollipop man, monsieur Le Goff. FC Nantes matches at the Beaujoire
+  with her father, who explained offside with sugar sachets.
+- Summers in **Pornic** with Mamie Jeanne, who taught her to swim in the sea at five.
 - **Summer 2004**: the family moved to **Rennes** when her mother got a post at
-  a primary school there. Camille hated the move for a year.
+  a primary school there. Camille hated the move for a year; at twelve she
+  drew her mother a map of a safe bike route to school ("my first planning
+  project") and was allowed to cycle again.
 - Lycée Chateaubriand in Rennes (2008–2011), where she met **Léa Fontaine** in
   seconde (September 2008).
 - Université Lumière Lyon 2: geography, then a master's in urban planning
@@ -49,11 +56,11 @@ other file in this folder agrees with this one; when in doubt, this file wins.
 | **Sam Whitaker** | Work friend and colleague | American (from Ohio), data analyst at Cadence Streets since 2019. Ran the numbers on the scooter trial with Camille. Hates cold water. |
 | **Inès** | Goddaughter | Léa's daughter, born 12 August 2023. |
 | **Dr Benali** | Neurologist in Lyon | Diagnosed her migraine with aura (February 2020). |
-| **Mamie Jeanne** | Paternal grandmother | Lives in **Pornic** (seaside). Taught Camille to swim in the sea. 90 in August 2022. |
+| **Mamie Jeanne** | Paternal grandmother | Lives in **Pornic** (seaside). Taught Camille to swim in the sea when she was five. 90 in August 2022. |
 
 Minor people: **Juliette** (Lyon friend, hosted her after the breakup),
 **Karim** (Léa's partner), **Lucía** (Mateo's wife), **Tony** (her manager at
-Cadence Streets), **Ruth** (in her team since 2025). Léa's birthday is **3 July**.
+Cadence Streets), **Ruth** and **Dev** (her team since 2025). Léa's birthday is **3 July**.
 
 ## Health
 
@@ -185,6 +192,13 @@ These are measurable and the chats follow them.
 - Opens with a concrete scene (a street, a time of day); ends each essay on a
   short sentence of five words or fewer.
 - Few questions; at most one rhetorical question per essay.
+
+### Journal (`journal.fr`, some English from 2024)
+
+- Written in French with normal capitals and punctuation (unlike her chats);
+  English creeps in from 2024 (the accident entry, the moving-in entry).
+- Short paragraphs, plain statements, often a list of what she *did* before
+  what she *felt*. Frequently a one-line last paragraph.
 
 ### Other people (for contrast)
 

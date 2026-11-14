@@ -1,0 +1,20 @@
+# Sample home for the fictional persona Camille Martin. See README.md.
+owner:
+  name: Camille Martin
+  aliases: [Camille, Cam]
+sources:
+  - type: whatsapp
+    path: sources/whatsapp
+  - type: vault
+    path: sources/vault
+    exclude: ["Templates/**"]
+    kinds:
+      "Journal/**": journal
+      "Health/**": medical
+      "Essays/**": essay
+  - type: tastes
+    path: sources/tastes
+embeddings:
+  enabled: true
+git:
+  autocommit: false

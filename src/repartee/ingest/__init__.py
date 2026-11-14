@@ -272,7 +272,8 @@ def _ingest_internal(
         try:
             items.extend(parse(path))
         except Exception as exc:
-            report.warn(f"{relative(path, folder)}: could not be read ({type(exc).__name__}: {exc})")
+            rel = relative(path, folder)
+            report.warn(f"{rel}: could not be read ({type(exc).__name__}: {exc})")
     return finish_items(items, report, holdout_percent), report
 
 

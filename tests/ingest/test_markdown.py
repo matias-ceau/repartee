@@ -125,7 +125,8 @@ def test_journal_one_item_per_file_or_dated_heading(tmp_path, owner):
     write(tmp_path / "Journal" / "2023-05-01.md", "# Morning\n\nCoffee.\n\n# Evening\n\nTired.\n")
     write(
         tmp_path / "Journal" / "journal.md",
-        "Preface.\n\n## 2023-06-01\n\nFirst day.\n\n### Detail\n\nMore.\n\n## 2023-06-02\n\nSecond.\n",
+        "Preface.\n\n## 2023-06-01\n\nFirst day.\n\n### Detail\n\nMore.\n\n"
+        "## 2023-06-02\n\nSecond.\n",
     )
     items, _ = ingest_source(VAULT, tmp_path, owner)
     daily = [i for i in items if i.container == "Journal/2023-05-01.md"]

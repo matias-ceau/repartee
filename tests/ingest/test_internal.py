@@ -72,7 +72,9 @@ def test_transcript_ids_stable_when_appended(tmp_path, owner):
 def test_transcript_mirror_kind(tmp_path, owner):
     path = write(
         tmp_path / "conversations" / "c.md",
-        TRANSCRIPT.replace("kind: interview", "kind: mirror").replace("mode: interview", "mode: chat"),
+        TRANSCRIPT.replace("kind: interview", "kind: mirror").replace(
+            "mode: interview", "mode: chat"
+        ),
     )
     items = parse_transcript(path, owner)
     assert {i.kind for i in items} == {"mirror"}

@@ -306,3 +306,34 @@ def test_whatsapp_large_file_is_fast(tmp_path, owner):
     assert len(items) == 50_000
     assert report.unparsed_lines == 0
     assert elapsed < 10
+
+
+def test_whatsapp_year_first_two_digit_dates(tmp_path, owner):
+    items, report = _parse(tmp_path, owner, "21. 3. 12. 오후 2:05 - Ana: 안녕\n")
+    assert items[0].timestamp == datetime(2021, 3, 12, 14, 5)
+    assert any("year-month-day" in w for w in report.warnings)
+    # Day-first reading jumps between years; year-first is chronological.
+    text = "21/03/30, 10:00 - Ana: a\n21/04/02, 10:00 - Ana: b\n21/04/15, 10:00 - Ana: c\n"
+    items, _ = _parse(tmp_path / "x", owner, text)
+    assert [i.timestamp.date().isoformat() for i in items] == [
+        "2021-03-30",
+        "2021-04-02",
+        "2021-04-15",
+    ]
+
+
+def test_whatsapp_more_languages(tmp_path, owner):
+    text = (
+        "12.03.21, 14:05 - Ana: Hallo\n"
+        "12.03.21, 14:06 - Ana hat Bob hinzugefügt\n"
+        "12.03.21, 14:07 - Ana: <Medien ausgeschlossen>\n"
+        "12.03.21, 14:08 - Ana: Diese Nachricht wurde gelöscht\n"
+        "12/3/21, 2:05 p. m. - Ana: hola\n"
+        "12/03/2021 14:06 - Ana saiu\n"
+        "12/03/2021 14:08 - Ana: <Arquivo de mídia oculto>\n"
+        "[12/03/21, 14:06:00] Ana: ‎immagine omessa\n"
+        "[12/03/21, 14:07:00] Ana Ruiz: ‎Ana ha aggiunto Bob\n"
+    )
+    items, report = _parse(tmp_path, owner, text)
+    assert [(i.text, i.timestamp.hour) for i in items] == [("Hallo", 14), ("hola", 14)]
+    assert report.unparsed_lines == 0

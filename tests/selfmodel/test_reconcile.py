@@ -10,13 +10,13 @@ from repartee.schema import AddClaim, ClaimOrigin, ClaimStatus, ReviseClaim, Sup
 from repartee.selfmodel import SelfModel, SelfModelError
 
 from .conftest import (
-    NURSE_LINE,
-    NURSE_TEXT,
     ANA,
     ANA_KEY,
     C_LYON,
     C_NURSE,
     C_TALK,
+    NURSE_LINE,
+    NURSE_TEXT,
     loaded,
     read_page,
     read_sidecar,

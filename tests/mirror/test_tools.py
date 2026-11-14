@@ -29,6 +29,7 @@ async def test_tools_search_self_read_page_search_memory_read_memory(world):
     assert "We met at university" in page.content
     assert f"{world.claims['met']} · confirmed" in page.content
     assert "^c-" not in page.content
+    assert "## Relationship" not in page.content  # empty scaffold sections are left out
     assert page.refs == [ANA]
 
     by_name = await box.call("read_page", {"path": "Ana"})
@@ -40,6 +41,7 @@ async def test_tools_search_self_read_page_search_memory_read_memory(world):
     assert "ch-b" in memory.content and "ch-a" not in memory.content
     assert "2022-04-02" in memory.content and "whatsapp" in memory.content
     assert memory.refs == ["ch-b"]
+    assert "\n  [2022-04-02 09:03] Camille Martin: j'hésite" in memory.content  # one per line
     assert len(memory.content) <= MAX_CHARS
 
     journal = await box.call("search_memory", {

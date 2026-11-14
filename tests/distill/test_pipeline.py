@@ -187,13 +187,20 @@ async def test_plan_counts_and_cost(env):
     assert plan.est_cost_usd == pytest.approx(sum(s.cost_usd for s in plan.stages))
     assert plan.est_input_tokens == sum(s.input_tokens for s in plan.stages)
     assert plan.est_cost_usd > 0
+    assert [s.stage for s in plan.stages] == ["extract", "consolidate", "core", "gaps"]
 
     batch = distiller.plan(batch=True)
     assert batch.stages[0].cost_usd == pytest.approx(extract.cost_usd / 2)
     assert distiller.plan(limit=1).chunks_pending == 1
     assert distiller.plan(source="whatsapp").chunks_total == 0
-    assert distiller.plan(since=datetime(2021, 3, 12)).chunks_total == 1
     assert len(env.fake.requests) == requests_before  # planning is free
+
+    await distiller.run(stages=["extract"])
+    env.fake.on("consolidate", ConsolidationResult())
+    await env.distiller().run(stages=["consolidate"])
+    idle = env.distiller().plan()
+    assert idle.chunks_pending == 0 and idle.est_cost_usd == 0 and idle.stages[0].requests == 0
+    assert distiller.plan(since=datetime(2021, 3, 12)).chunks_total == 1
 
 
 async def test_run_filters_and_progress(env):

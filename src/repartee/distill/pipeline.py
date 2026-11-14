@@ -74,7 +74,7 @@ class StageEstimate(BaseModel):
     """Estimated requests, tokens and cost of one stage."""
 
     stage: str
-    requests: int = 0
+    requests: int = 0  # answered requests (failed ones are in errors)
     input_tokens: int = 0
     output_tokens: int = 0
     cost_usd: float = 0.0
@@ -103,7 +103,7 @@ class DistillReport(BaseModel):
     ops_refused: int = 0
     questions_added: int = 0
     claim_ids: list[str] = []  # claims added or changed in this run
-    requests: int = 0
+    requests: int = 0  # answered requests (failed ones are in errors)
     input_tokens: int = 0
     output_tokens: int = 0
     cost_usd: float = 0.0  # estimated from the usage the responses reported
@@ -198,18 +198,21 @@ class Distiller:
                           cost_usd=estimate_cost(models.smart, cons_in, cons_out)),
         ]
         changes = bool(pending or waiting)
+        # new claims from this run feed core and gaps: count them in, up to the core cap
+        expected = min(cons_out, core_stage.MAX_CLAIMS * 25) if changes else 0
         claims = core_stage.select_claims(self.model)
-        if claims and (changes or core_stage.fingerprint(claims)
-                       != self.fingerprints.get("core")):
-            c_in = estimate_tokens(CORE_SYSTEM) + sum(estimate_tokens(c.text) + 12
-                                                      for c in claims)
+        if (claims or changes) and (changes or core_stage.fingerprint(claims)
+                                    != self.fingerprints.get("core")):
+            c_in = estimate_tokens(CORE_SYSTEM) + min(
+                sum(estimate_tokens(c.text) + 12 for c in claims) + expected,
+                core_stage.MAX_CLAIMS * 40)
             stages.append(StageEstimate(
                 stage="core", requests=1, input_tokens=c_in, output_tokens=CORE_OUTPUT_TOKENS,
                 cost_usd=estimate_cost(models.smart, c_in, CORE_OUTPUT_TOKENS)))
-        if self.model.claims() and (changes or gaps_stage.fingerprint(self.model)
+        if (claims or changes) and (changes or gaps_stage.fingerprint(self.model)
                                     != self.fingerprints.get("gaps")):
-            g_in = estimate_tokens(GAPS_SYSTEM) + estimate_tokens(
-                gaps_stage.overview(self.model))
+            g_in = (estimate_tokens(GAPS_SYSTEM) + estimate_tokens(gaps_stage.overview(self.model))
+                    + expected // 4)
             stages.append(StageEstimate(
                 stage="gaps", requests=1, input_tokens=g_in, output_tokens=GAPS_OUTPUT_TOKENS,
                 cost_usd=estimate_cost(models.smart, g_in, GAPS_OUTPUT_TOKENS)))

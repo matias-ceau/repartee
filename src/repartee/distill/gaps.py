@@ -20,14 +20,14 @@ COVERED_KINDS = [k for k in PAGE_DIRS if k is not PageKind.VOICE]
 
 
 class GapQuestion(BaseModel):
-    """One question for the owner (flat, for structured output)."""
+    """One question for me, with the key of the page it concerns, if any."""
 
     text: str
     page: str | None = None
 
 
 class GapsResult(BaseModel):
-    """Structured output of a ``gaps`` request."""
+    """At most 10 questions, the most useful first."""
 
     questions: list[GapQuestion] = Field(default_factory=list)
 

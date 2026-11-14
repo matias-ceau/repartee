@@ -51,18 +51,19 @@ _KIND_LABEL: dict[Kind, str] = {
 
 
 class ExtractedObservation(BaseModel):
-    """One observation as the model returns it (flat, for structured output)."""
+    """One fact the material shows about my life, with the lines that support it."""
 
     subject_kind: SubjectKind
-    subject: str
-    text: str
-    when: str | None = None
-    confidence: float = 0.5
-    evidence: list[str] = Field(default_factory=list)
+    subject: str = Field(description="Person's name, topic label, taste, pattern, year, area.")
+    text: str = Field(description="First person, standalone, one fact.")
+    when: str | None = Field(default=None, description="YYYY-MM-DD, YYYY-MM or YYYY.")
+    confidence: float = Field(default=0.5, description="0 to 1: how directly it is supported.")
+    evidence: list[str] = Field(default_factory=list,
+                                description="Ids of the supporting lines, exactly as written.")
 
 
 class ExtractionResult(BaseModel):
-    """Structured output of an ``extract`` request."""
+    """What this chunk shows; an empty list when it holds nothing lasting."""
 
     observations: list[ExtractedObservation] = Field(default_factory=list)
 

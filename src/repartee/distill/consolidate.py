@@ -46,19 +46,19 @@ _SOURCE_LABEL: dict[str, str] = {
 
 
 class PlannedOp(BaseModel):
-    """One operation as the model returns it (flat, for structured output)."""
+    """One change to the page, citing the observations (o1, o2...) it rests on."""
 
     op: Literal["add", "support", "revise", "supersede", "question"]
     claim_id: str | None = None
     section: str | None = None
     text: str | None = None
-    observations: list[str] = Field(default_factory=list)
+    observations: list[str] = Field(default_factory=list, description="Refs such as o1.")
     valid_from: str | None = None
     valid_to: str | None = None
 
 
 class ConsolidationResult(BaseModel):
-    """Structured output of a ``consolidate`` request."""
+    """The operations that bring the page up to date; empty when nothing should change."""
 
     ops: list[PlannedOp] = Field(default_factory=list)
 

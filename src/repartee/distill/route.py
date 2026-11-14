@@ -60,7 +60,7 @@ def norm_label(label: str) -> str:
 
 
 class RouteDecision(BaseModel):
-    """The model's verdict on one label (flat, for structured output)."""
+    """Where one label should be filed: an existing page, or a canonical label."""
 
     kind: str
     label: str
@@ -69,7 +69,7 @@ class RouteDecision(BaseModel):
 
 
 class RouteResult(BaseModel):
-    """Structured output of a ``route`` request."""
+    """One decision per label given."""
 
     decisions: list[RouteDecision] = Field(default_factory=list)
 

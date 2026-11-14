@@ -347,8 +347,12 @@ def _distinctive(texts: Sequence[str], background: Sequence[str], n_words: int,
             b, big_a, big_b = theirs[gram], my_totals[n], their_totals[n]
             delta = (math.log((a + a0) / (big_a - a + a0))
                      - math.log((b + a0) / (big_b - b + a0)))
-            if delta >= math.log(2):  # at least twice as frequent, relatively
-                scores[gram] = delta / math.sqrt(1 / (a + a0) + 1 / (b + a0))
+            z = delta / math.sqrt(1 / (a + a0) + 1 / (b + a0))
+            # Keep what is at least twice as frequent and unlikely to be chance, then
+            # rank by how lopsided it is. Ranking by z alone favours common words
+            # ("j'ai", "oui") over the phrases only the owner uses ("en vrai").
+            if delta >= math.log(2) and z >= 1.0:
+                scores[gram] = delta + a * 1e-6
     else:
         common = {g for g, _ in Counter({g: c for g, c in mine.items() if " " not in g})
                   .most_common(50)}

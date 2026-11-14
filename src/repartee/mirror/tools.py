@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 
 import regex
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from repartee.llm.base import ToolSpec
 from repartee.mirror.context import claim_status, clip, fmt_span, fmt_when, indent
@@ -46,6 +46,8 @@ _SOURCES = tuple(ID_PREFIX)
 _KINDS = tuple(k.value for k in Kind)
 _WORD = regex.compile(r"[\p{L}\p{N}]{2,}")
 _CLAIM_ID = regex.compile(r"[ \t]+\^(c-[0-9a-f]{8})[ \t]*$")
+_CHAT_LINE = regex.compile(r"\s+(?=(?:…\s*)?\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\] )")
+_HEADING = regex.compile(r"^#{1,6}\s")
 _MARKER = regex.compile(r"^\s*<!--\s*repartee:generated:(start|end)\s*-->\s*$")
 
 
@@ -114,7 +116,7 @@ class _ReadMemory(_Args):
 
 
 class _GetVoice(_Args):
-    register: str | None = None
+    register_name: str | None = Field(default=None, alias="register")
     recipient: str | None = None
     topic: str | None = None
 
@@ -378,9 +380,9 @@ class Toolbox:
                 continue
             lines.append(_CLAIM_ID.sub(self._annotate, line))
         aliases = f" (also: {', '.join(page.aliases)})" if page.aliases else ""
-        header = (f"Page {key}{aliases}. Claim lines end with [id · status]; everything "
-                  "else on the page was written by the owner.")
-        body = "\n".join(lines).strip()
+        header = (f"Page {key}{aliases}. Claim lines end with [id · status]; other text is "
+                  "the owner's own. Empty sections are left out.")
+        body = "\n".join(_drop_empty_sections(lines)).strip()
         return ToolOutcome(content=_bound([header, body], MAX_READ_CHARS), refs=[key],
                            summary=f"page {key}")
 
@@ -416,7 +418,8 @@ class Toolbox:
                 summary=f"memory {label} → nothing")
         blocks = [f"Memory, {label}: {len(hits)} excerpts, best first."]
         for hit in hits:
-            blocks.append(self._chunk_header(hit.chunk) + "\n" + indent(hit.snippet.strip()))
+            snippet = _CHAT_LINE.sub("\n", hit.snippet.strip())  # one message per line
+            blocks.append(self._chunk_header(hit.chunk) + "\n" + indent(snippet))
         blocks.append("read_memory(chunk_id) shows a whole excerpt and what came around it.")
         refs = [hit.chunk.id for hit in hits]
         return ToolOutcome(content=_bound(blocks, MAX_CHARS), refs=refs,
@@ -495,7 +498,7 @@ class Toolbox:
         registers = list(self.voice.registers())
         if not registers:
             raise _Refusal("No style cards yet: the voice statistics have not been built.")
-        register = args.register or registers[0]
+        register = args.register_name or registers[0]
         if register not in registers:
             raise _Refusal(f"No register {register!r}. Registers: {', '.join(registers)}.")
         others = [r for r in registers if r != register]
@@ -563,6 +566,20 @@ def _parse_when(text: str, which: str) -> datetime:
     except ValueError:
         pass
     raise _Refusal(f"{which}={text!r} is not a date. Use YYYY, YYYY-MM or YYYY-MM-DD.")
+
+
+def _drop_empty_sections(lines: list[str]) -> list[str]:
+    """Leave out level-2+ headings with nothing under them before the next heading."""
+    out: list[str] = []
+    for n, line in enumerate(lines):
+        if _HEADING.match(line) and not line.startswith("# "):
+            rest = next((x for x in lines[n + 1:] if x.strip()), None)
+            if rest is None or (_HEADING.match(rest) and rest.count("#", 0, 7)
+                                <= line.count("#", 0, 7)):
+                continue
+        out.append(line)
+    # Collapse the runs of blank lines the dropped headings leave behind.
+    return [x for n, x in enumerate(out) if x.strip() or (n and out[n - 1].strip())]
 
 
 def _bound(blocks: Sequence[str], limit: int) -> str:

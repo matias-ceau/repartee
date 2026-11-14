@@ -20,7 +20,7 @@ KIND_ORDER = (PageKind.PERSON, PageKind.TOPIC, PageKind.BEHAVIOUR, PageKind.TIME
 
 
 class CoreResult(BaseModel):
-    """Structured output of a ``core`` request."""
+    """The generated part of core.md, as markdown."""
 
     markdown: str
 

@@ -50,7 +50,9 @@ class ObservationLog:
     def _shards(self) -> list[Path]:
         if not self.dir.is_dir():
             return []
-        return sorted(self.dir.glob(f"{SHARD_PREFIX}*.jsonl"))
+        found = [p for p in self.dir.glob(f"{SHARD_PREFIX}*.jsonl")
+                 if p.stem.removeprefix(SHARD_PREFIX).isdigit()]
+        return sorted(found, key=lambda p: int(p.stem.removeprefix(SHARD_PREFIX)))
 
     def _load(self) -> None:
         for shard in self._shards():
@@ -83,7 +85,7 @@ class ObservationLog:
         if target is None:
             target = self.dir / f"{SHARD_PREFIX}0001.jsonl"
         elif target.stat().st_size and target.stat().st_size + len(lines) > SHARD_LIMIT:
-            number = int(target.stem.removeprefix(SHARD_PREFIX) or 0) + 1
+            number = int(target.stem.removeprefix(SHARD_PREFIX)) + 1
             target = self.dir / f"{SHARD_PREFIX}{number:04d}.jsonl"
         with target.open("ab") as handle:
             handle.write(lines)

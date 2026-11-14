@@ -1,4 +1,4 @@
-"""Fixtures for mirror tests: a small invented home, self-model and corpus. All data is fictional."""
+"""Fixtures for mirror tests: a small home, self-model and corpus. All data is invented."""
 
 from __future__ import annotations
 
@@ -148,7 +148,9 @@ class StubVoice:
         return ["whatsapp.fr", "essay.en"]
 
     def card(self, register_name: str) -> str | None:
-        return "Short lowercase bursts, no final period." if register_name == "whatsapp.fr" else None
+        if register_name == "whatsapp.fr":
+            return "Short lowercase bursts, no final period."
+        return None
 
     def samples(self, register_name: str, recipient: str | None, topic: str | None,
                 k: int) -> list[Item]:

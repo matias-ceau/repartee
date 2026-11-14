@@ -39,6 +39,7 @@ packages = ["src/repartee"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "live: needs a real model API key or the real embedding model; skipped by default",
 ]

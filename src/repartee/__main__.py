@@ -1,3 +1,5 @@
-"""`python -m repartee` bootstraps the chat CLI."""
-from repartee.ui.cli import main
+"""`python -m repartee` runs the command line."""
+
+from repartee.cli import main
+
 main()

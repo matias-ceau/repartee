@@ -33,6 +33,9 @@ updated: 2026-11-14
 Anything I write here myself. The pipeline never touches it.
 """
 
+NURSE_TEXT = "Works as a nurse, mostly night shifts."
+NURSE_LINE = f"- {NURSE_TEXT} ^{C_NURSE}\n"
+
 ANA_CLAIMS = {
     C_LYON: ("Who", "Friend from university; we met in Lyon in 2014."),
     C_NURSE: ("Who", "Works as a nurse, mostly night shifts."),

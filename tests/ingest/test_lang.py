@@ -41,3 +41,33 @@ def test_short_messages_inherit_language(tmp_path, owner):
     assert [i.lang for i in items] == ["fr", "fr", "fr", "fr"]
     assert items[1].meta.get("lang_inherited") is True
     assert "lang_inherited" not in items[0].meta
+
+
+def test_stray_language_on_short_message_is_corrected(tmp_path, owner):
+    # "Parfois. Ha ha" alone looks Italian to a stopword detector; in a French chat it is French.
+    french = [
+        "je pense qu'on peut y aller demain matin",
+        "tu es sûre que c'est une bonne idée ?",
+        "oui, je suis sûre, on y va",
+        "il faut que je passe chez le médecin avant",
+        "on se retrouve devant la gare vers midi",
+        "je ne sais pas encore ce que je vais faire",
+    ]
+    lines = [f"12/03/2021, 14:{i:02d} - Ana: {french[i % len(french)]}" for i in range(30)]
+    lines.insert(15, "12/03/2021, 14:15 - Maman: Parfois. Ha ha")
+    write(tmp_path / "chat.txt", "\n".join(lines) + "\n")
+    items, _ = ingest_source(SourceConfig(type="whatsapp", path="."), tmp_path, owner)
+    stray = next(i for i in items if i.text == "Parfois. Ha ha")
+    assert stray.lang == "fr"
+    assert stray.meta.get("lang_inherited") is True
+
+
+def test_long_message_in_another_language_is_kept(tmp_path, owner):
+    french = "je pense qu'on peut y aller demain matin si tu veux"
+    lines = [f"12/03/2021, 14:{i:02d} - Ana: {french}" for i in range(30)]
+    english = "honestly I think we should just stay here and wait for the others to arrive"
+    lines.insert(15, f"12/03/2021, 14:15 - Cam: {english}")
+    write(tmp_path / "chat.txt", "\n".join(lines) + "\n")
+    items, _ = ingest_source(SourceConfig(type="whatsapp", path="."), tmp_path, owner)
+    kept = next(i for i in items if i.text == english)
+    assert kept.lang == "en"

@@ -239,14 +239,10 @@ async def _merge_labels(model: SelfModel, groups: list[_Group], owner: OwnerConf
         routing.errors.append("route: the reply had no decisions")
         return groups
 
-    by_label = {(str(g.kind), norm_label(g.display)): g for g in asked}
+    decisions = {(d.kind.strip().lower(), norm_label(d.label)): d for d in result.decisions}
     out: dict[tuple[PageKind, str], _Group] = {}
     for group in groups:
-        decision = None
-        for d in result.decisions:
-            if by_label.get((d.kind.strip().lower(), norm_label(d.label))) is group:
-                decision = d
-                break
+        decision = decisions.get((str(group.kind), norm_label(group.display)))
         if decision and decision.existing_page:
             page = model.page(decision.existing_page.strip().removesuffix(".md"))
             if page is not None and page.kind == group.kind:

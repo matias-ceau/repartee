@@ -58,12 +58,31 @@ LANG_WINDOW = 20
 # ----------------------------------------------------------------- post-processing
 
 
+#: A short chat message whose detected language is this rare in its chat is taken
+#: for a misdetection ("Parfois. Ha ha" reads as Italian) and inherits instead.
+STRAY_LANG_SHARE = 0.05
+STRAY_LANG_MAX_WORDS = 8
+
+
 def _inherit_languages(items: list[Item]) -> None:
     detected = [item.lang for item in items]
     groups: dict[tuple[str, str], list[int]] = {}
     for idx, item in enumerate(items):
         groups.setdefault((item.source, item.container), []).append(idx)
     half = LANG_WINDOW // 2
+    for indices in groups.values():
+        counts = Counter(detected[i] for i in indices if detected[i] is not None)
+        total = sum(counts.values())
+        for idx in indices:
+            lang = detected[idx]
+            if (
+                lang is not None
+                and items[idx].kind is Kind.MESSAGE
+                and counts[lang] < total * STRAY_LANG_SHARE
+                and len(items[idx].text.split()) <= STRAY_LANG_MAX_WORDS
+            ):
+                detected[idx] = None
+                items[idx].lang = None
     for indices in groups.values():
         for pos, idx in enumerate(indices):
             if detected[idx] is not None:

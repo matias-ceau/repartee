@@ -107,6 +107,36 @@ async def test_draft_request_contains_card_samples_and_context(env):
     assert not fake.calls("revise")
 
 
+async def test_draft_prompt_carries_owner_card_notes_not_page_scaffolding(env):
+    drafter = await built(env)
+    card = env.home.self_dir / "voice" / "whatsapp.fr.md"
+    card.write_text(card.read_text(encoding="utf-8") + "Jamais de point-virgule.\n",
+                    encoding="utf-8")
+    drafter.model.load()
+    drafter.llm.on("draft", DraftOut(variants=[IN_STYLE]))
+    await drafter.draft(DraftRequest(intent="pas vendredi", recipient="Ana"))
+    text = prompt_of(drafter.llm.calls("draft")[0])
+    assert "Jamais de point-virgule." in text
+    assert "outrank" in text
+    assert "_Measured over" not in text and "repartee:generated" not in text
+    # Ana's profile matches the general one closely: no "with them" section repeating the card.
+    assert "Starts messages in lowercase" in text
+    assert text.count("Starts messages in lowercase") == 1
+    assert "<with_them>" not in text
+
+
+def test_recipient_specific_habits_only_when_they_differ():
+    from repartee.voice.drafter import _differs
+
+    usual = ["Messages are short: usually 3 words, rarely over 4.",
+             "Starts messages in lowercase (100%)."]
+    assert not _differs("Messages are short: usually 3 words, rarely over 5.", usual)
+    assert not _differs("Starts messages in lowercase (96%).", usual)
+    assert _differs("Messages are of medium length: usually 12 words, rarely over 30.", usual)
+    assert _differs("Starts messages in lowercase (70%).", usual)
+    assert _differs("Uses about 2 emoji per message.", usual)
+
+
 async def test_draft_variants_and_longform(env):
     drafter = await built(env, person_page=False)
     fake = drafter.llm

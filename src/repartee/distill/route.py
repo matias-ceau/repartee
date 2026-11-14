@@ -16,6 +16,7 @@ Order of rules, per observation:
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
@@ -25,7 +26,7 @@ from pydantic import BaseModel, Field
 from repartee.config import OwnerConfig
 from repartee.distill.cost import Spend
 from repartee.distill.prompts import ROUTE_SYSTEM, fill
-from repartee.llm.base import LLMClient, LLMError, LLMRequest, Message, SystemBlock
+from repartee.llm.base import LLMClient, LLMRequest, Message, SystemBlock
 from repartee.schema import (
     CATCH_ALL_SLUG,
     CreatePage,
@@ -109,16 +110,20 @@ def _ensure_page(model: SelfModel, routing: Routing, kind: PageKind, slug: str, 
     return key
 
 
-def is_chat_person(label: str, people: Iterable[str]) -> bool:
-    """True when a label names a chat participant (full name, or the start of it)."""
+def chat_person(label: str, people: Iterable[str]) -> str | None:
+    """The chat participant a label names (full name, or the start of it); None if no match.
+
+    When the label is the start of several names, the label itself is returned: it is a
+    participant, but which one is unclear.
+    """
     want = norm_label(label).split()
     if not want:
-        return False
-    for person in people:
-        tokens = norm_label(person).split()
-        if tokens and tokens[: len(want)] == want:
-            return True
-    return False
+        return None
+    found = {person for person in people
+             if norm_label(person).split()[: len(want)] == want}
+    if len(found) == 1:
+        return found.pop()
+    return label if found else None
 
 
 def _route_request(model: SelfModel, groups: list[_Group], owner: OwnerConfig) -> LLMRequest:
@@ -204,13 +209,15 @@ async def route(
         else:
             count = sum(label_counts.get((str(group.kind), n), 0) for n in group.labels)
             count = max(count, len(group.observations))
-            exempt = group.kind == PageKind.HEALTH or (
-                group.kind == PageKind.PERSON
-                and any(is_chat_person(label, people) for label in group.labels.values()))
-            if exempt or count >= min_observations:
-                aliases = sorted({d for d in group.labels.values() if d != group.display})
-                key = _ensure_page(model, routing, group.kind, group.display, group.display,
-                                   aliases)
+            in_chat = None
+            if group.kind == PageKind.PERSON:
+                in_chat = next(filter(None, (chat_person(label, people)
+                                             for label in group.labels.values())), None)
+            if in_chat or group.kind == PageKind.HEALTH or count >= min_observations:
+                title = in_chat or group.display
+                key = model.resolve(group.kind, title) if in_chat else None
+                aliases = sorted({d for d in group.labels.values() if d != title})
+                key = key or _ensure_page(model, routing, group.kind, title, title, aliases)
             else:
                 key = _ensure_page(model, routing, group.kind, CATCH_ALL_SLUG,
                                    CATCH_ALL_TITLES[group.kind])
@@ -220,16 +227,24 @@ async def route(
     return routing
 
 
+def _worth_asking(model: SelfModel, groups: list[_Group]) -> bool:
+    """A kind with two new labels, or a new label and pages it might belong to."""
+    per_kind = Counter(g.kind for g in groups)
+    return any(n > 1 or any(p.key.rsplit("/", 1)[-1] != CATCH_ALL_SLUG
+                            for p in model.pages(kind))
+               for kind, n in per_kind.items())
+
+
 async def _merge_labels(model: SelfModel, groups: list[_Group], owner: OwnerConfig,
                         llm: LLMClient | None, routing: Routing,
                         spend: Spend | None) -> list[_Group]:
     """Ask the model which labels are the same subject; on any failure, keep them apart."""
-    if not groups or llm is None:
+    if llm is None or not _worth_asking(model, groups):
         return groups
     asked = groups[:MAX_ROUTE_LABELS]
     try:
         response = await llm.complete(_route_request(model, asked, owner))
-    except LLMError as error:
+    except Exception as error:  # noqa: BLE001 - routing works without the merge
         routing.errors.append(f"route: {error}")
         return groups
     if spend is not None:

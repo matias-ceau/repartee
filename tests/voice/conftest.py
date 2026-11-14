@@ -11,8 +11,8 @@ import pytest
 from repartee.config import ChunkingConfig
 from repartee.home import Home
 from repartee.ingest.chunking import chunk_items
-from repartee.schema import Item, Kind
 from repartee.scaffold import init_home
+from repartee.schema import Item, Kind
 from repartee.selfmodel.model import SelfModel
 from repartee.store.corpus import Corpus
 from repartee.store.embed import HashEmbedder

@@ -141,16 +141,17 @@ def draft_prompt(*, owner: str, register_name: str, chat: bool, intent: str,
     """The user message of a `draft` request; every part is optional except the intent."""
     parts: list[str] = []
     if recipient:
-        about = (f"\n\nWhat {owner} knows about them, from their self-model:\n"
-                 f"<person>\n{person_page}\n</person>" if person_page else "")
+        about = (f"\n\nWhat {owner} knows about {recipient}, from {owner}'s self-model (written "
+                 f"in the first person, as {owner}):\n<person>\n{person_page}\n</person>"
+                 if person_page else "")
         parts.append(f"{owner} is writing to {recipient}.{about}")
     if card:
         parts.append(f'{owner}\'s style card for "{register_name}":\n<style_card>\n{card}\n'
                      "</style_card>")
     if recipient and recipient_habits:
         listed = "\n".join(f"- {line}" for line in recipient_habits)
-        parts.append(f"Measured on {owner}'s messages to {recipient} specifically (where this "
-                     f"differs from the card, follow this):\n<with_them>\n{listed}\n</with_them>")
+        parts.append(f"With {recipient} specifically, {owner} writes differently from the card "
+                     f"in these ways; follow these:\n<with_them>\n{listed}\n</with_them>")
     if samples:
         parts.append(f"Real texts by {owner} in this register, to absorb and not to copy:\n"
                      "<samples>\n" + "\n".join(samples) + "\n</samples>")
@@ -160,7 +161,9 @@ def draft_prompt(*, owner: str, register_name: str, chat: bool, intent: str,
     if context:
         parts.append(f"The conversation {owner} is answering, most recent last:\n"
                      f"<conversation>\n{context}\n</conversation>")
-    parts.append(f"What {owner} wants to say, in their own words:\n<intent>\n{intent}\n</intent>")
+    parts.append(f"What {owner} wants to say, in their own words. It may be phrased as a note "
+                 f"to you (\"tell her ...\"); write the text itself, not a text about it.\n"
+                 f"<intent>\n{intent}\n</intent>")
 
     if chat:
         task = (f"Write {_versions(variants)} of what {owner} would send now. Each version is "
@@ -200,7 +203,7 @@ def revise_prompt(owner: str, flagged: Sequence[tuple[int, Sequence[str]]]) -> s
     return (
         f"I measured the draft against everything {owner} has written in this register, and "
         f"{'it reads' if one else 'these versions read'} differently from how they actually "
-        "write:\n\n" + "\n\n".join(blocks) + "\n\n"
+        f'write ("you" below means {owner}):\n\n' + "\n\n".join(blocks) + "\n\n"
         f"Rewrite {'that version so it reads' if one else 'those versions so they read'} like "
         f"{owner}. Keep what is said exactly the same and keep whatever already sounds like "
         f"them; change only the form. Return {_versions(len(flagged))}, in this order: {order}."

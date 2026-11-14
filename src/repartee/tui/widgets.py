@@ -82,6 +82,24 @@ class Notice(Line):
         super().__init__(text, classes="notice error" if error else "notice")
 
 
+class HelpBlock(Vertical):
+    """The commands, one per row, the description wrapping in its own column."""
+
+    def __init__(self, rows: Sequence[tuple[str, str]]) -> None:
+        super().__init__(classes="help")
+        self.rows = list(rows)
+
+    @property
+    def text(self) -> str:
+        return "\n".join(f"{cmd}  {what}" for cmd, what in self.rows)
+
+    def compose(self) -> ComposeResult:
+        for cmd, what in self.rows:
+            with Horizontal(classes="help-row"):
+                yield Line(cmd, classes="help-cmd")
+                yield Line(what, classes="help-what")
+
+
 class DraftBlock(Vertical):
     """A draft, each message of the burst as its own block, the way it would be sent."""
 
@@ -142,6 +160,10 @@ class LookupPanel(Vertical):
             entry.remove()
         self.entries = []
         self._empty.display = True
+
+    def scroll_to_top(self) -> None:
+        """Show the first lookup (after an answer, read from the top)."""
+        self._list.scroll_home(animate=False)
 
     def add(self, summary: str, refs: Sequence[str], *, error: bool = False) -> LookupEntry:
         """List one lookup with the things it found (the same thing listed once)."""
@@ -235,6 +257,10 @@ class EvalView(VerticalScroll, can_focus=True):
     @property
     def result_text(self) -> str:
         return self._result.text
+
+    @property
+    def status_text(self) -> str:
+        return self._status.text
 
     def compose(self) -> ComposeResult:
         yield self._status

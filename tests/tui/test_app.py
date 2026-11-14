@@ -15,7 +15,15 @@ from repartee.mirror import Mirror
 from repartee.runtime import Runtime
 from repartee.schema import ClaimStatus
 from repartee.tui.app import MirrorApp
-from repartee.tui.widgets import DraftBlock, EvalView, LookupPanel, Notice, ReviewView, Turn
+from repartee.tui.widgets import (
+    DraftBlock,
+    EvalView,
+    HelpBlock,
+    LookupPanel,
+    Notice,
+    ReviewView,
+    Turn,
+)
 
 from .conftest import BURST, add_claims
 
@@ -385,9 +393,25 @@ async def test_help_lists_the_commands(rt: Runtime) -> None:
     app = MirrorApp(rt)
     async with app.run_test(size=SIZE) as pilot:
         await submit(app, pilot, "/help")
-        text = "\n".join(notices(app))
+        text = "\n".join(block.text for block in app.query(HelpBlock))
         for command in ("/chat", "/draft", "/interview", "/review", "/eval", "/accept",
                         "/sources", "/quit"):
             assert command in text
         await submit(app, pilot, "/nonsense")
         assert any("Unknown command" in n for n in notices(app))
+
+
+async def test_eval_with_the_real_blind_test(rt: Runtime, fake: FakeLLM) -> None:
+    fake.on("brief", {"brief": "Pass on a short piece of news."})
+    app = MirrorApp(rt)  # no stub: the evals package is imported when /eval starts
+    async with app.run_test(size=SIZE) as pilot:
+        await submit(app, pilot, "/eval 2")
+        view = app.query_one(EvalView)
+        assert view.text_a and view.text_b
+        assert "Pair 1 of 2" in view.status_text
+        await pilot.press("a")
+        await pilot.press("b")
+        await pilot.pause()
+        assert "Saved to evals/" in view.result_text
+        saved = list((rt.home.root / "evals").glob("voice-*.json"))
+        assert len(saved) == 1

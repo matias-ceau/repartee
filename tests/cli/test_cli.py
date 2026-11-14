@@ -379,20 +379,60 @@ def _fake_evals(monkeypatch: pytest.MonkeyPatch, recall_result, style_result) ->
 
 def test_eval_recall_and_style_print_reports(cli, persona: Path, fake: FakeLLM,
                                              monkeypatch: pytest.MonkeyPatch) -> None:
-    from pydantic import BaseModel
+    from datetime import datetime
 
-    class Result(BaseModel):
-        questions: int = 2
-        score: float = 0.75
-        answers: list[str] = ["a", "b"]
+    from repartee.evals.recall import FactGrade, QuestionResult, RecallResult
 
-    seen = _fake_evals(monkeypatch, Result(), {"sentence_length": 0.12, "overall": 0.3})
+    result = RecallResult(
+        created=datetime(2026, 11, 14), questions_file="recall.yaml",
+        questions=[
+            QuestionResult(question="Where do I live?", expected=["Copenhagen", "since 2021"],
+                           answer="Copenhagen.",
+                           grades=[FactGrade(fact="Copenhagen", verdict="present"),
+                                   FactGrade(fact="since 2021", verdict="absent")]),
+            QuestionResult(question="Who is Léa?", expected=["my sister"], error="timed out"),
+        ],
+        facts=2, present=1, absent=1, failed=1, recall=0.5,
+        path=persona / "evals" / "recall-x.json")
+    style = {"overall:mirror": 0.3, "overall:owner": 0.1, "whatsapp.fr:mirror": 0.35,
+             "whatsapp.fr:owner": 0.12, "whatsapp.en:owner": 0.08}
+    seen = _fake_evals(monkeypatch, result, style)
+
     recall = cli("eval", "recall", str(persona / "recall.yaml"), home=persona)
     assert recall.exit_code == 0, recall.output
     assert seen["recall"] == persona / "recall.yaml"
-    assert "score" in recall.stdout and "0.75" in recall.stdout
+    out = recall.stdout
+    assert out.startswith("Recall 50%: 1 of 2 expected facts present, 1 absent")
+    assert "absent: since 2021 (Where do I live?)" in out
+    assert "Who is Léa?: timed out" in out
+    assert "recall-x.json" in out
 
-    style = cli("eval", "style", "-n", "5", home=persona)
-    assert style.exit_code == 0, style.output
+    report = cli("eval", "style", "-n", "5", home=persona)
+    assert report.exit_code == 0, report.output
     assert seen["style"] == 5
-    assert "overall" in style.stdout and "0.30" in style.stdout
+    rows = report.stdout.splitlines()
+    assert rows[0].split() == ["register", "mirror", "you"]
+    assert rows[1].split() == ["whatsapp.en", "-", "0.08"]
+    assert rows[2].split() == ["whatsapp.fr", "0.35", "0.12"]
+    assert rows[3].split() == ["overall", "0.30", "0.10"]
+
+
+def test_eval_style_without_profiles(cli, persona: Path, fake: FakeLLM,
+                                     monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_evals(monkeypatch, None, {})
+    result = cli("eval", "style", home=persona)
+    assert result.exit_code == 0
+    assert "repartee voice" in result.stdout
+
+
+def test_lazy_imports_name_real_functions() -> None:
+    import inspect
+
+    from repartee.evals.recall import run_recall
+    from repartee.evals.style_distance import style_distance_report
+    from repartee.tui.app import MODES, run
+
+    assert list(inspect.signature(run).parameters) == ["rt", "mode"]
+    assert {"chat", "interview", "review", "eval"} <= set(MODES)
+    assert list(inspect.signature(run_recall).parameters) == ["rt", "questions_file"]
+    assert "n" in inspect.signature(style_distance_report).parameters

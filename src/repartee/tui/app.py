@@ -37,6 +37,7 @@ from repartee.sync import distil_file
 from repartee.tui.widgets import (
     DraftBlock,
     EvalView,
+    HelpBlock,
     Line,
     LookupPanel,
     ModeBar,
@@ -59,17 +60,18 @@ HINTS = {
     "eval": "a or b: which one did you write? · / for a command",
 }
 
-HELP = """Commands
-/chat [message]       talk with the mirror
-/draft @name what     draft a message; a plain message after it revises the draft
-/accept [text]        save the draft as is, or the text you actually sent
-                      (separate messages with |)
-/interview [topic]    the mirror asks, you answer; /skip moves on, /end finishes
-/review               confirm (y), edit (e), reject (n) or skip (s) what it inferred
-/eval [n]             blind voice test: pick which of A or B you wrote
-/sources              show or hide the looked-up panel
-/quit                 save the session and leave (also ctrl+q)
-Esc stops an answer that is still coming."""
+HELP = [
+    ("/chat [message]", "talk with the mirror"),
+    ("/draft @name what", "draft a message; a plain message after it revises the draft"),
+    ("/accept [text]", "save the draft as is, or the text you actually sent "
+                       "(separate messages with |)"),
+    ("/interview [topic]", "the mirror asks, you answer; /skip moves on, /end finishes"),
+    ("/review", "confirm (y), edit (e), reject (n) or skip (s) what it inferred"),
+    ("/eval [n]", "blind voice test: pick which of A or B you wrote"),
+    ("/sources", "show or hide the looked-up panel"),
+    ("/quit", "save the session and leave (also ctrl+q)"),
+    ("Esc", "stop an answer that is still coming"),
+]
 
 SOURCE_ABBREV = {"whatsapp": "wa"}
 
@@ -169,7 +171,8 @@ class MirrorApp(App):
                 yield EvalView(id="eval")
             yield LookupPanel(id="lookups")
         yield Line(HINTS["chat"], id="hint")
-        yield Input(id="prompt", placeholder="Talk to the mirror, or /help")
+        yield Input(id="prompt", placeholder="Talk to the mirror, or /help",
+                    select_on_focus=False)
 
     @property
     def conversation(self) -> VerticalScroll:
@@ -277,7 +280,11 @@ class MirrorApp(App):
         word, _, rest = text[1:].partition(" ")
         word, rest = word.lower(), rest.strip()
         if word in ("help", "h", "?"):
-            await self._say(HELP)
+            if self.mode in CONVERSATION_MODES:
+                await self.conversation.mount(HelpBlock(HELP))
+                self.conversation.scroll_end(animate=False)
+            else:
+                await self._say("\n".join(f"{cmd}  {what}" for cmd, what in HELP))
         elif word in ("quit", "q", "exit"):
             await self.action_quit()
         elif word == "sources":
@@ -381,6 +388,7 @@ class MirrorApp(App):
         finally:
             self.busy = False
             self._hint()
+            panel.scroll_to_top()
 
     async def _fail(self, exc: BaseException, retry: str | None) -> None:
         if isinstance(exc, SelfModelConflict):

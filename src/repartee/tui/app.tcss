@@ -73,6 +73,25 @@ Screen {
     color: $text-error;
 }
 
+.help {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.help-row {
+    height: auto;
+}
+
+.help-cmd {
+    width: 20;
+    text-style: bold;
+}
+
+.help-what {
+    width: 1fr;
+    color: $text-muted;
+}
+
 /* Drafts: each message as its own block */
 
 .draft {

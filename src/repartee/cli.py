@@ -548,20 +548,44 @@ def eval_voice(ctx: click.Context) -> None:
     _tui(ctx, "eval")
 
 
-def _render_result(result: Any) -> list[str]:
-    """A short report of an eval result: its scalar fields and the size of its lists."""
-    render = getattr(result, "render", None)
-    if callable(render):
-        return [str(render())]
-    data = result.model_dump() if hasattr(result, "model_dump") else dict(result)
-    lines = []
-    for name, value in data.items():
-        if isinstance(value, float):
-            lines.append(f"{name:<20} {value:.2f}")
-        elif isinstance(value, (int, str, bool)) or value is None:
-            lines.append(f"{name:<20} {value}")
-        elif isinstance(value, (list, tuple, dict)):
-            lines.append(f"{name:<20} {len(value):,}")
+def _recall_lines(result: Any) -> list[str]:
+    """A recall result as a few lines: the score, then what went wrong, question by question."""
+    from repartee.status import counted
+
+    graded = len(result.questions) - result.failed
+    lines = [f"Recall {result.recall:.0%}: {result.present:,} of "
+             f"{counted(result.facts, 'expected fact')} present, {result.absent:,} absent, "
+             f"{result.contradicted:,} contradicted, over {counted(graded, 'question')}."]
+    if result.failed:
+        lines.append(f"{counted(result.failed, 'question')} could not be graded.")
+    for question in result.questions:
+        if question.error:
+            lines.append(f"  ! {question.question}: {_one_line(question.error)}")
+            continue
+        for grade in question.grades:
+            if grade.verdict != "present":
+                lines.append(f"  {grade.verdict}: {grade.fact} ({question.question})")
+    if result.path:
+        lines.append(f"Saved in {result.path}.")
+    return lines
+
+
+def _style_lines(report: dict[str, float]) -> list[str]:
+    """Style distances as a table: one register per row, the mirror next to your own texts."""
+    if not report:
+        return ["No style profiles yet; run `repartee voice` first."]
+    rows: dict[str, dict[str, float]] = {}
+    for key, value in report.items():
+        register, _, who = key.rpartition(":")
+        rows.setdefault(register or key, {})[who] = value
+    width = max(len("register"), *(len(r) for r in rows))
+    lines = [f"{'register':<{width}}  {'mirror':>7}  {'you':>7}"]
+    for register in sorted(rows, key=lambda r: (r == "overall", r)):
+        cells = [f"{rows[register][who]:>7.2f}" if who in rows[register] else f"{'-':>7}"
+                 for who in ("mirror", "owner")]
+        lines.append(f"{register:<{width}}  {'  '.join(cells)}")
+    lines.append("Distance from your measured style: 0 is identical, 1 a major deviation. "
+                 "'you' is your own held-out texts, the floor to compare with.")
     return lines
 
 
@@ -575,7 +599,7 @@ def eval_recall(ctx: click.Context, questions_file: Path) -> None:
     rt = _open(ctx, "auto", need_llm=True)
     _note(f"Asking the questions in {questions_file}...")
     result = _run(run_recall(rt, questions_file))
-    click.echo("\n".join(_render_result(result)))
+    click.echo("\n".join(_recall_lines(result)))
 
 
 @eval_group.command(name="style")
@@ -589,6 +613,4 @@ def eval_style(ctx: click.Context, n: int) -> None:
     rt = _open(ctx, "auto", need_llm=True)
     _note(f"Drafting {n} texts to compare with yours...")
     report = _run(style_distance_report(rt, n=n))
-    width = max((len(k) for k in report), default=0)
-    for name, value in report.items():
-        click.echo(f"{name:<{width}}  {value:.2f}")
+    click.echo("\n".join(_style_lines(report)))

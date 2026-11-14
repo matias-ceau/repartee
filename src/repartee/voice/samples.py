@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 import statistics
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 
 from repartee.schema import Item, Kind, SearchFilters
 from repartee.store.corpus import Corpus
@@ -112,15 +112,17 @@ def _topical(corpus: Corpus, register_name: str, topic: str | None,
 
 def pick_samples(corpus: Corpus, register_name: str, *,
                  recipient: str | Sequence[str] | None = None, topic: str | None = None,
-                 k: int = 8) -> list[Item]:
+                 k: int = 8, exclude: Collection[str] = ()) -> list[Item]:
     """Up to k of the owner's texts in the register, best first, never two from one minute.
+
+    Items whose id is in `exclude` are never returned.
 
     Score: written in a chat with the recipient, then topical similarity to `topic`, then
     a small recency bonus; chat messages far from the owner's usual length rank lower.
     """
     if k <= 0:
         return []
-    candidates = register_items(corpus, register_name)
+    candidates = [c for c in register_items(corpus, register_name) if c.id not in exclude]
     if not candidates:
         return []
     by_id = {c.id: c for c in candidates}

@@ -130,8 +130,10 @@ class Mirror:
     def __init__(self, home: Home, config: HomeConfig, corpus: Corpus, model: SelfModel,
                  llm: LLMClient, drafter: DrafterLike | None = None, *,
                  voice: VoiceLookup | None = None, clock: Callable[[], datetime] = datetime.now,
-                 max_tool_rounds: int = MAX_TOOL_ROUNDS):
+                 max_tool_rounds: int = MAX_TOOL_ROUNDS, log_sessions: bool = True):
         self.home = home
+        #: Off for evals: a logged session is later ingested as the owner's own writing.
+        self.log_sessions = log_sessions
         self.config = config
         self.corpus = corpus
         self.model = model
@@ -372,6 +374,8 @@ class Mirror:
     # -------------------------------------------------------------- sessions
 
     def _record(self, owner_text: str | None, mirror_text: str) -> None:
+        if not self.log_sessions:
+            return
         if self._log is None:
             directory = (self.home.interviews_dir if self.mode == "interview"
                          else self.home.conversations_dir)

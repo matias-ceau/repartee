@@ -40,3 +40,10 @@ def test_pick_samples_is_deterministic(env):
     a = pick_samples(env.corpus, "whatsapp.fr", recipient="Ana Ruiz", topic="ce soir")
     b = pick_samples(env.corpus, "whatsapp.fr", recipient="Ana Ruiz", topic="ce soir")
     assert [s.id for s in a] == [s.id for s in b]
+
+
+def test_pick_samples_leaves_out_excluded_ids(env):
+    first = pick_samples(env.corpus, "whatsapp.fr", recipient="Ana Ruiz", k=4)
+    excluded = {s.id for s in first[:2]}
+    again = pick_samples(env.corpus, "whatsapp.fr", recipient="Ana Ruiz", k=4, exclude=excluded)
+    assert again and not excluded & {s.id for s in again}

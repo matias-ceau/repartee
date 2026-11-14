@@ -307,6 +307,9 @@ class DraftRequest(BaseModel):
     register_name: str | None = None  # e.g. "whatsapp.fr"; inferred when absent
     context: str | None = None  # e.g. the thread being answered
     variants: int = 1
+    #: Item ids never to use as samples or reply pairs. The evals set this to the
+    #: real text a draft is being compared with, so the mirror cannot copy from it.
+    exclude_ids: list[str] = Field(default_factory=list)
 
 
 class DraftResult(BaseModel):

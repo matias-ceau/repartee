@@ -278,7 +278,8 @@ async def draft_unit(drafter: Drafter, unit: Unit, brief: str) -> list[str]:
     """The mirror's version of the unit, from the brief alone, in the unit's shape."""
     result = await drafter.draft(DraftRequest(
         intent=f"{brief}\n\n{unit.shape_note()}", recipient=unit.recipient,
-        register_name=unit.register_name, context=unit.context))
+        register_name=unit.register_name, context=unit.context,
+        exclude_ids=list(unit.item_ids)))
     shaped = unit.shape(result.variants[0] if result.variants else [])
     if not shaped:
         raise LLMError("the draft came back empty")

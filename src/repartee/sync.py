@@ -5,6 +5,7 @@ Each step is incremental. Nothing here talks to a person; the CLI and the TUI do
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from pathlib import Path
 
@@ -104,9 +105,10 @@ async def run_sync(rt: Runtime, *, batch: bool = False,
 async def distil_file(rt: Runtime, path: Path) -> list[str]:
     """Ingest and distil one new transcript; returns the ids of the claims it produced.
 
-    This is the hook an interview calls when it ends.
+    This is the hook an interview calls when it ends. Ingest runs in a thread so the
+    interface stays responsive while it parses.
     """
-    run_ingest(rt, commit=False)
+    await asyncio.to_thread(run_ingest, rt, commit=False)
     container = _container_of(rt, path)
     report = await run_distill(rt, commit=False, containers=[container])
     _commit(rt, f"interview {path.stem}")

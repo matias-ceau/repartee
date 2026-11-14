@@ -229,3 +229,19 @@ def test_record_with_nothing_kept_is_not_accepted(env):
     result = DraftResult(register_name="whatsapp.fr", variants=[["ok"]])
     path = drafter.record(request, result, final=[])
     assert parse_draft(path, OwnerConfig(name=OWNER)) == []
+
+
+async def test_draft_never_shows_excluded_items_as_samples(env):
+    # An eval drafts from a brief of a real text; that text must not come back as a sample.
+    drafter = await built(env)
+    fake = drafter.llm
+    fake.on("draft", DraftOut(variants=[IN_STYLE]))
+    request = DraftRequest(intent="dis-lui que je peux pas vendredi", recipient="Ana")
+    first = await drafter.draft(request)
+    shown = [i for i in first.used if env.corpus.get_item(i) is not None]
+    assert shown
+    excluded = shown[:3]
+
+    second = await drafter.draft(request.model_copy(update={"exclude_ids": excluded}))
+    assert not set(excluded) & set(second.used)
+    assert [i for i in second.used if env.corpus.get_item(i) is not None]  # others took their place

@@ -201,3 +201,13 @@ async def test_set_mode_writes_previous_session(make_mirror, fake, world):
     mirror.set_mode("review")
     assert len(list(world.home.conversations_dir.glob("*.md"))) == 1
     assert mirror.history == []
+
+
+async def test_log_sessions_off_writes_no_transcript(world, fake):
+    from repartee.mirror import Mirror
+
+    fake.add("I went back and forth all spring.")
+    mirror = Mirror(world.home, world.config, world.corpus, world.model, fake, log_sessions=False)
+    await mirror.ask("what did I think about moving?")
+    assert mirror.end_session() is None
+    assert not list(world.home.conversations_dir.glob("*.md"))

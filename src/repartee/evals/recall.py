@@ -9,7 +9,6 @@ it. A hedged or refused answer counts as absent: not knowing is allowed, inventi
 from __future__ import annotations
 
 import logging
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -18,7 +17,6 @@ import yaml
 from pydantic import BaseModel, Field, ValidationError
 
 from repartee.evals.common import Saver, bounded, settings
-from repartee.home import Home
 from repartee.llm.base import LLMClient, LLMError, LLMRequest, Message, SystemBlock
 from repartee.runtime import Runtime
 
@@ -176,21 +174,19 @@ async def run_recall(rt: Runtime, questions_file: Path) -> RecallResult:
     llm = rt.require_llm()
     saver = Saver(rt.home, "recall")
 
-    with tempfile.TemporaryDirectory(prefix="repartee-recall-") as scratch:
-        async def one(q: RecallQuestion) -> QuestionResult:
-            result = QuestionResult(question=q.question, expected=q.expected, sources=q.sources)
-            try:
-                mirror = rt.mirror("chat")
-                mirror.home = Home(Path(scratch))  # the session log stays out of the home
-                result.answer = await mirror.ask(q.question)
-                mirror.end_session()
-                result.grades = await judge(llm, q.question, q.expected, result.answer)
-            except Exception as error:  # one failed question is an entry, never a crash
-                log.warning("recall: %r failed: %s", q.question, error)
-                result.error = f"{type(error).__name__}: {error}"
-            return result
+    async def one(q: RecallQuestion) -> QuestionResult:
+        result = QuestionResult(question=q.question, expected=q.expected, sources=q.sources)
+        try:
+            # Unlogged: a logged session would later be ingested as the owner's own writing.
+            mirror = rt.mirror("chat", log=False)
+            result.answer = await mirror.ask(q.question)
+            result.grades = await judge(llm, q.question, q.expected, result.answer)
+        except Exception as error:  # one failed question is an entry, never a crash
+            log.warning("recall: %r failed: %s", q.question, error)
+            result.error = f"{type(error).__name__}: {error}"
+        return result
 
-        results = await bounded([lambda q=q: one(q) for q in questions])
+    results = await bounded([lambda q=q: one(q) for q in questions])
 
     graded = [r for r in results if isinstance(r, QuestionResult)]
     verdicts = [g.verdict for r in graded for g in r.grades]

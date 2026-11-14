@@ -78,10 +78,12 @@ class Runtime:
     def voice_lookup(self) -> _VoiceLookup:
         return _VoiceLookup(self)
 
-    def mirror(self, mode: Literal["chat", "draft", "interview", "review"] = "chat") -> Mirror:
+    def mirror(self, mode: Literal["chat", "draft", "interview", "review"] = "chat", *,
+               log: bool = True) -> Mirror:
+        """A mirror in the given mode. `log=False` keeps the session out of the home (evals)."""
         mirror = Mirror(
             self.home, self.config, self.corpus, self.model, self.require_llm(),
-            self.drafter(), voice=self.voice_lookup(),
+            self.drafter(), voice=self.voice_lookup(), log_sessions=log,
         )
         mirror.set_mode(mode)
         return mirror

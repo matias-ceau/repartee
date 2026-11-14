@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -193,12 +193,15 @@ class Drafter:
         return min(pool, key=lambda n: (-pool[n], n))
 
     # ------------------------------------------------------------------ draft
-    def _pairs(self, register_name: str, context: str, names: list[str]) -> list[ReplyPair]:
+    def _pairs(self, register_name: str, context: str, names: list[str],
+               exclude: Collection[str] = ()) -> list[ReplyPair]:
         lang = register_name.rsplit(".", 1)[-1] if "." in register_name else None
         found: list[ReplyPair] = []
         for who in [*names, None]:
             for pair in self.corpus.search_reply_pairs(context, who, k=REPLY_PAIRS):
                 if pair.id in {p.id for p in found}:
+                    continue
+                if exclude and not set(exclude).isdisjoint(pair.reply_item_ids):
                     continue
                 if lang and pair.lang and pair.lang != lang:
                     continue
@@ -228,8 +231,8 @@ class Drafter:
         if request.context:
             topic += "\n" + request.context[-CONTEXT_FOR_TOPIC:]
         samples = pick_samples(self.corpus, register, recipient=names or None, topic=topic,
-                               k=SAMPLES)
-        pairs = self._pairs(register, request.context, names) if (
+                               k=SAMPLES, exclude=request.exclude_ids)
+        pairs = self._pairs(register, request.context, names, request.exclude_ids) if (
             chat and request.context and request.context.strip()) else []
 
         hint = None

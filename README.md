@@ -101,6 +101,7 @@ Obsidian vault.
 | `repartee why CLAIM_ID` | a claim with the material behind it |
 | `repartee eval voice` | blind test: can you tell your text from the mirror's? |
 | `repartee eval recall FILE` | score answers against known facts |
+| `repartee eval style` | how far the mirror's drafts are from your measured style |
 
 Inside the mirror: `/chat`, `/draft @name ...`, `/accept`, `/interview`,
 `/review`, `/eval`, `/sources`, `/quit`.
@@ -118,8 +119,11 @@ model at that model's price (Anthropic's server-side fallback).
 
 ## What is verified
 
-- About 500 automated tests, all offline, including one that runs the sample
+- Over 550 automated tests, all offline, including one that runs the sample
   person end to end: ingest, distill, voice, a chat turn, a draft, an interview.
+- The real commands were run by hand on a copy of the sample person, up to the
+  point where a model is needed: ingest (with the real embedding model),
+  status, the cost estimate, the statistics-only style cards.
 - The model is replaced by a scripted fake in those tests. Prompts, costs and
   answer quality against the real API are untested.
 - The WhatsApp parser handles the common export variants in several languages

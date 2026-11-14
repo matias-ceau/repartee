@@ -1,262 +1,144 @@
 # Repartee
 
-> **AI that knows your knowledge**
+Repartee is a mirror of its owner. It reads one person's own material (chat
+archives, notes, journal, essays, interviews), builds a readable model of what
+they lived, think and how they write, and then:
 
-Repartee is a command-line AI assistant that integrates with your personal knowledge base. Unlike generic AI tools that forget everything after each session, Repartee understands your notes, documents, and accumulated wisdom—making your knowledge available in every conversation.
+- **answers as them**, in the first person, from their own record;
+- **drafts in their voice**, for them to proofread and send.
 
-**Status**: Active development | **Version**: 0.2.0 | **Target**: v1.0 in 6 months
+It runs in a terminal, for one person, on their own machine. The thinking is
+done by a Claude model through the Anthropic API.
 
----
+> Status: the whole pipeline is built and tested against a fictional sample
+> person with a scripted stand-in for the model. It has **not yet been run
+> against the real API or real data**. See [What is verified](#what-is-verified).
 
-## 🎯 Why Repartee?
+## How it works
 
-**The Problem**: You have 100s or 1000s of notes in Obsidian, Logseq, or Markdown files. When you ask ChatGPT or Claude a question, they have no idea this knowledge exists.
-
-**The Solution**: Repartee indexes your notes, builds a knowledge graph, and automatically retrieves relevant information during conversations. It's like having an AI assistant that's actually read all your notes.
-
-**The Difference**: Most CLI agents are either coding-focused (Aider, Continue.dev) or generic chatbots (ChatGPT CLI). Repartee bridges the gap—it's an AI assistant designed for **knowledge workers** with extensive personal knowledge management systems.
-
-## ✨ Key Features
-
-### 🧠 Knowledge Integration (Unique to Repartee)
-- **Obsidian Vault Integration**: Import and search your entire Obsidian vault
-- **Knowledge Graph**: Automatically builds concept maps from your notes
-- **Semantic Search**: Find relevant notes using AI embeddings
-- **Auto-Context Injection**: Relevant notes are automatically added to conversations
-
-### 💾 Advanced Memory Systems
-- **Short-term Memory**: Current conversation context with intelligent truncation
-- **Episodic Memory**: Searchable history of past conversations with vector embeddings
-- **Semantic Memory**: Structured knowledge graph for concepts and relationships
-- **Cross-Session Context**: AI remembers relevant information across conversations
-
-### 🔌 Multi-Provider Support
-- **OpenAI** (GPT-4, GPT-4o, etc.)
-- **Anthropic** (Claude 3.7/3.5 Sonnet)
-- **Google** (Gemini 1.5 Pro)
-- **Perplexity** (Sonar models)
-- **Local Models** (Ollama support - coming soon)
-
-### 🖥️ Multiple Interfaces
-- **CLI**: Quick one-shot queries and interactive conversations
-- **REPL**: Persistent interactive shell (coming soon)
-- **TUI**: Rich terminal UI with Textual (coming soon)
-
-### 🔒 Privacy First
-- **Local-First Design**: All data stored on your machine (XDG-compliant)
-- **Local Model Support**: Run entirely offline with Ollama (coming soon)
-- **Private Mode**: Zero data sent to external APIs (coming soon)
-- **Transparent Storage**: Clear data handling, no hidden tracking
-
-## 📦 Installation
-
-**Requirements**: Python 3.13+ (we're working on supporting 3.11+)
-
-```bash
-# Clone the repository
-git clone https://github.com/matias-ceau/repartee.git
-cd repartee
-
-# Install using uv (recommended)
-uv pip install -e .
-
-# Or using pip
-pip install -e .
+```
+your material ──ingest──▶ searchable index ──distill──▶ self-model (markdown you can edit)
+                                │                              │
+                                └───────────── mirror ◀────────┘
+                                        chat · draft · interview · review
 ```
 
-**Note**: Repartee is in active development. Some features are still being implemented.
+1. **Ingest** turns WhatsApp exports, an Obsidian vault, journal, essays,
+   medical notes and taste lists into normalized items. No model involved.
+2. **Store** indexes them for keyword and meaning search (SQLite plus a local
+   multilingual embedding model).
+3. **Distill** has the model read the material and write a **self-model**:
+   pages about people, topics, tastes, behaviour, health and a timeline. Every
+   line is a claim that points to the material it came from.
+4. **Voice** measures how you write in each kind of text and language (message
+   length, punctuation, emoji, pet phrases) and keeps real samples.
+5. **The mirror** answers and drafts using the self-model, the raw material and
+   the voice measurements. It says "I don't know" when it has nothing to go on.
 
-## Configuration
+The self-model is a folder of markdown you can open in Obsidian. Edit a line
+and it becomes confirmed; delete a line and the mirror will not infer it again;
+anything you write yourself is never touched.
 
-Repartee requires API keys to access language models. Set them as environment variables:
+## Your data stays out of this repository
+
+- This repository holds code only. Your material and everything derived from it
+  live in a separate **home** directory, meant to be its own private git
+  repository.
+- Repartee refuses to use a home placed inside another repository, and ships a
+  pre-commit hook (`scripts/pre-commit`) that blocks chat exports, home data
+  and API keys from being committed here.
+- Your material **is sent to the Anthropic API** for processing. Nothing is
+  kept local-only. If that is not acceptable for some of your data, do not add
+  it as a source.
+
+## Quick start
 
 ```bash
-# OpenAI API key
-export OPENAI_API_KEY=your-openai-key
-
-# Anthropic API key
-export ANTHROPIC_API_KEY=your-anthropic-key
-
-# Google AI API key
-export GOOGLE_API_KEY=your-google-key
-
-# Perplexity API key
-export PERPLEXITY_API_KEY=your-perplexity-key
+uv sync                       # or: uv pip install -e .
+export ANTHROPIC_API_KEY=...  # only needed for the steps that call the model
 ```
 
-Or create a `.env` file in your home directory with these keys.
-
-## 🚀 Usage
-
-### Basic Usage
+Try it on the bundled fictional person first:
 
 ```bash
-# Interactive conversation with default model
+cp -r examples/persona ~/repartee-demo
+repartee --home ~/repartee-demo ingest          # parse the sources (no model)
+repartee --home ~/repartee-demo status
+repartee --home ~/repartee-demo distill --dry-run   # what a full run would cost
+repartee --home ~/repartee-demo sync            # distill and build the voice
+repartee --home ~/repartee-demo                 # open the mirror
+```
+
+Then make your own home:
+
+```bash
+repartee init ~/repartee-self        # creates the folders and a git repository
+$EDITOR ~/repartee-self/repartee.yaml    # your name, the names you appear under, your sources
+export REPARTEE_HOME=~/repartee-self
+repartee sync
 repartee
-
-# Use Anthropic's Claude
-repartee -p anthropic
-
-# Specify a particular model
-repartee -p openai -m gpt-4-turbo
-
-# One-shot query
-repartee "What is the capital of France?"
 ```
 
-### Working with Your Knowledge
+Put WhatsApp exports (`_chat.txt` files, folders or zips) under
+`sources/whatsapp/`, or point a source at an existing folder such as your
+Obsidian vault.
 
-```bash
-# Import your Obsidian vault
-repartee --import-obsidian ~/path/to/vault
+## Commands
 
-# Search your notes
-repartee "What did I write about machine learning?"
+| Command | Does |
+|---|---|
+| `repartee init [PATH]` | create a home |
+| `repartee ingest` | parse sources into the index |
+| `repartee distill` | extract, consolidate, rebuild the summary and open questions |
+| `repartee voice` | rebuild writing statistics and style cards |
+| `repartee sync` | all of the above, incrementally |
+| `repartee status` | what is indexed, what the self-model holds, what is pending |
+| `repartee` | open the mirror (chat) |
+| `repartee ask "..."` | one answer on stdout |
+| `repartee draft "..." --to NAME` | one draft on stdout |
+| `repartee interview` | let the mirror ask you questions to fill gaps |
+| `repartee review` | confirm, edit or reject what it inferred |
+| `repartee why CLAIM_ID` | a claim with the material behind it |
+| `repartee eval voice` | blind test: can you tell your text from the mirror's? |
+| `repartee eval recall FILE` | score answers against known facts |
 
-# Get answers using your knowledge
-repartee "Summarize my notes on Python async programming"
-```
+Inside the mirror: `/chat`, `/draft @name ...`, `/accept`, `/interview`,
+`/review`, `/eval`, `/sources`, `/quit`.
 
-### Advanced Features
+## Cost
 
-```bash
-# List recent conversations
-repartee --list-conversations
+Every tier uses `claude-opus-5-5` by default. The first distill of a large
+archive is the expensive step: `repartee distill --dry-run` prints an estimate,
+and a real run asks before spending more than a threshold. To spend less, set
+`models.bulk` in `repartee.yaml` to a cheaper model for the extraction pass, or
+run `repartee distill --batch`.
 
-# Continue a previous conversation
-repartee --continue <conversation-id>
+If Claude declines a request on safety grounds, the API retries it on an older
+model at that model's price (Anthropic's server-side fallback).
 
-# Export conversation to Markdown
-repartee --export <conversation-id>
-```
+## What is verified
 
-## Memory Architecture
-
-Repartee implements a multi-layered memory architecture:
-
-1. **Short-Term Memory**: Manages the current conversation context with token-aware truncation to maintain context within model limits.
-
-2. **Episodic Memory**: Stores conversation history with vector embeddings for semantic search, allowing the retrieval of relevant past exchanges.
-
-3. **Semantic Memory**: Implements a knowledge graph that stores concepts and relationships, with special support for importing from Obsidian vaults.
-
-## Project Structure
-
-```
-repartee/
-├── config/             # Configuration files
-├── src/
-│   └── repartee/
-│       ├── models/     # Model integrations (OpenAI, Anthropic, etc.)
-│       ├── memory/     # Memory systems
-│       │   ├── short_term_memory.py
-│       │   ├── episodic_memory.py
-│       │   └── semantic_memory.py
-│       ├── ui/         # User interfaces
-│       │   ├── cli.py
-│       │   ├── repl.py
-│       │   └── textual_tui.py
-│       ├── tools/      # Tool integrations
-│       └── main.py     # Entry point
-└── pyproject.toml     # Package configuration
-```
+- About 500 automated tests, all offline, including one that runs the sample
+  person end to end: ingest, distill, voice, a chat turn, a draft, an interview.
+- The model is replaced by a scripted fake in those tests. Prompts, costs and
+  answer quality against the real API are untested.
+- The WhatsApp parser handles the common export variants in several languages
+  and reports any line it cannot place, but it was written without a real
+  export to check against. Run `repartee ingest` and read the report.
 
 ## Development
 
-For development, uv makes dependency management simple:
-
 ```bash
-# Add a new dependency
-uv pip install some-package
-
-# Update the lock file
-uv pip freeze > requirements.txt
+uv sync
+.venv/bin/python -m pytest -q
+.venv/bin/ruff check src tests
+ln -s ../../scripts/pre-commit .git/hooks/pre-commit   # recommended
 ```
 
-## 🗺️ Roadmap
+- Design: [docs/superpowers/specs/2026-11-14-mirror-design.md](docs/superpowers/specs/2026-11-14-mirror-design.md)
+- Build plan: [docs/superpowers/plans/2026-11-14-mirror.md](docs/superpowers/plans/2026-11-14-mirror.md)
+- Earlier direction (a general chat client): [docs/archive/](docs/archive/)
 
-Repartee is under active development. We've completed a comprehensive analysis of the project's viability and created a detailed roadmap. See [docs/ANALYSIS_RESULTS.md](docs/ANALYSIS_RESULTS.md) for the full analysis.
+## License
 
-### Current Status (v0.2.0)
-- [x] Core memory architecture (short-term, episodic, semantic)
-- [x] Multi-provider model support (OpenAI, Anthropic, Google)
-- [x] Basic CLI interface
-- [x] Configuration system
-- [x] Obsidian integration foundation
-
-### In Progress (v0.3.0 - Foundation)
-- [ ] Comprehensive logging system
-- [ ] Test suite with 80%+ coverage
-- [ ] CI/CD pipeline
-- [ ] Error handling and retries
-- [ ] Python 3.11+ support
-
-### Coming Soon (v0.4.0 - User Experience)
-- [ ] Complete REPL mode
-- [ ] Rich TUI interface with Textual
-- [ ] Conversation management (save, load, search)
-- [ ] Export functionality
-
-### Planned (v0.5.0+ - Knowledge & Privacy)
-- [ ] Enhanced Obsidian integration
-- [ ] Semantic search across knowledge base
-- [ ] Local model support (Ollama)
-- [ ] Local embeddings
-- [ ] Privacy mode
-- [ ] Plugin system
-
-**Target**: v1.0 release in 6 months. See [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for the detailed plan.
-
-## 🤝 Contributing
-
-Repartee is actively seeking contributors! Whether you're interested in:
-- Adding new model providers
-- Improving the knowledge integration
-- Building plugins
-- Writing documentation
-- Testing and reporting bugs
-
-We'd love your help. See [docs/NEXT_ACTIONS.md](docs/NEXT_ACTIONS.md) for immediate opportunities.
-
-### Development Setup
-
-```bash
-# Clone and install for development
-git clone https://github.com/matias-ceau/repartee.git
-cd repartee
-uv pip install -e .
-
-# Run tests (coming soon)
-pytest
-
-# Check code style
-ruff check src/
-```
-
-## 📖 Documentation
-
-- **[Analysis Results](docs/ANALYSIS_RESULTS.md)** - Project viability analysis and strategic positioning
-- **[Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md)** - Detailed 6-month development plan
-- **[Strategic Positioning](docs/STRATEGIC_POSITIONING.md)** - Market positioning and messaging
-- **[Next Actions](docs/NEXT_ACTIONS.md)** - Immediate actionable next steps
-- **[Reference Spec](docs/REFERENCE_SPEC.md)** - Technical architecture documentation
-
-## 🙏 Acknowledgments
-
-Repartee is built on the shoulders of giants:
-- [Obsidian](https://obsidian.md) - Inspiration for knowledge management
-- [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Google](https://ai.google.dev) - AI model providers
-- [Textual](https://textual.textualize.io) - Modern TUI framework
-- [Rich](https://rich.readthedocs.io) - Beautiful terminal output
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-**Status**: Active development (v0.2.0)  
-**Goal**: v1.0 in 6 months with full knowledge integration  
-**Community**: Building - contributors welcome!  
-
-⭐ Star this repo if you're interested in AI that understands your personal knowledge!
+See [LICENSE](LICENSE).

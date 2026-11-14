@@ -1,0 +1,204 @@
+/* Plain and readable; theme variables only, so light and dark terminals both work. */
+
+* {
+    scrollbar-size-vertical: 1;
+}
+
+Screen {
+    layout: vertical;
+    background: $background;
+    color: $foreground;
+}
+
+#modebar {
+    height: 1;
+    background: $panel;
+    color: $foreground;
+}
+
+#modebar-title {
+    width: 1fr;
+    padding: 0 1;
+    text-style: bold;
+}
+
+#modebar-help {
+    width: auto;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+#main {
+    height: 1fr;
+}
+
+#views {
+    width: 1fr;
+    height: 1fr;
+}
+
+#conversation {
+    height: 1fr;
+    padding: 1 1 0 1;
+}
+
+/* Conversation */
+
+.turn {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.turn-who {
+    width: 5;
+    color: $text-muted;
+}
+
+.turn-me .turn-who {
+    color: $text-primary;
+    text-style: bold;
+}
+
+.turn-body {
+    width: 1fr;
+}
+
+.notice {
+    height: auto;
+    margin-bottom: 1;
+    color: $text-muted;
+}
+
+.notice.error {
+    color: $text-error;
+}
+
+/* Drafts: each message as its own block */
+
+.draft {
+    height: auto;
+    margin: 0 0 1 5;
+}
+
+.draft-heading {
+    color: $text-muted;
+}
+
+.draft-or {
+    color: $text-muted;
+    padding-left: 1;
+}
+
+.bubble {
+    width: 1fr;
+    height: auto;
+    border: round $primary;
+    padding: 0 1;
+}
+
+/* The looked-up panel */
+
+#lookups {
+    width: 30;
+    height: 1fr;
+    border-left: vkey $panel;
+    padding: 1 0 0 1;
+}
+
+.lookups-title {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.lookups-list {
+    height: 1fr;
+    padding-right: 1;
+}
+
+.lookup-summary {
+    text-style: bold;
+}
+
+.lookup-ref {
+    color: $text-muted;
+    padding-left: 2;
+}
+
+.lookups-empty {
+    color: $text-muted;
+}
+
+.lookup {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.lookup.error {
+    color: $text-error;
+}
+
+/* Review and blind test */
+
+ReviewView, EvalView {
+    height: 1fr;
+    padding: 1 2;
+}
+
+.view-status {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+.card {
+    height: auto;
+}
+
+.card-where, .card-status, .excerpt-where {
+    color: $text-muted;
+}
+
+.card-claim {
+    text-style: bold;
+}
+
+.card-heading {
+    text-style: bold;
+    margin-top: 1;
+}
+
+.excerpt-where {
+    margin-top: 1;
+}
+
+.excerpt {
+    padding-left: 2;
+}
+
+.view-message {
+    height: auto;
+    margin-top: 1;
+}
+
+.eval-box {
+    height: auto;
+    border: round $primary;
+    padding: 0 1;
+    margin-bottom: 1;
+}
+
+.eval-label {
+    text-style: bold;
+}
+
+/* Bottom: the hint line and the prompt */
+
+#hint {
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+    background: $panel;
+}
+
+#prompt {
+    height: 3;
+}

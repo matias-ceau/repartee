@@ -260,6 +260,7 @@ class _Header:
     time: str
     ampm: str | None
     rest: str
+    ampm_first: bool = False  # "오후 2:05": East Asian locales, which write dates y-m-d
 
 
 @dataclass
@@ -282,10 +283,10 @@ def _match_header(line: str) -> _Header | None:
     except (ValueError, IndexError):
         return None
     ampm = m["ampm"] or m["ampm1"]
-    return _Header(0, fields, len(parts[0]), m["time"], ampm, m["rest"])
+    return _Header(0, fields, len(parts[0]), m["time"], ampm, m["rest"], bool(m["ampm1"]))
 
 
-def _year(value: int, digits_hint: int = 4) -> int:
+def _year(value: int) -> int:
     return 2000 + value if value < 100 else value
 
 
@@ -339,6 +340,22 @@ def _choose_order(
 ) -> str:
     if forced:
         return forced
+    order = _day_month_order(headers, label, report)
+    # Two-digit years first ("21. 3. 12."): only when the locale or the chronology says so.
+    short = [h for h in headers if h.first_len < 3]
+    if short and all(_make_date(h, "ymd") is not None for h in short):
+        current = [_make_date(h, order) for h in short]
+        ymd = [_make_date(h, "ymd") for h in short]
+        asian = sum(h.ampm_first for h in short) * 2 > len(short)
+        if asian or _backwards(ymd) < _backwards(current):
+            why = "the time format is East Asian" if asian else "dates are then in order"
+            report.warn(f"{label}: read dates as year-month-day because {why} "
+                        f"(set options.date_order to force)")
+            return "ymd"
+    return order
+
+
+def _day_month_order(headers: list[_Header], label: str, report: ParseReport) -> str:
     ambiguous = [h for h in headers if h.first_len < 3]
     if not ambiguous:
         return "dmy"
@@ -393,7 +410,7 @@ def parse_chat(
 ) -> list[Item]:
     """Parse the text of one export into message items, updating the report."""
     label = label or chat
-    lines = text.split("\n")
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     headers: list[_Header] = []
     for idx, line in enumerate(lines):
         h = _match_header(line)

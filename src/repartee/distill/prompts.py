@@ -87,9 +87,14 @@ choose a page of the same kind, and only when you are sure it is the same subjec
 wrong merge mixes two people or topics together.
 - canonical: the label it should be filed under otherwise. Give labels that mean the same \
 subject the same canonical label, preferably the fullest, most specific form (a full name \
-for a person, a clear noun phrase for a topic). Keep different subjects apart. When in \
-doubt, keep the label as it is.
-Return one decision per label you were given, with the kind and label copied exactly.\
+for a person, a clear noun phrase for a topic). Labels in different languages, or a \
+relation and a name ("my sister", "ma sœur", "Ana"), are the same subject when \
+the examples show it. Variants of one condition or body part ("knee", "right knee", "knee \
+injury") are one subject. Keep different subjects apart. When in doubt, keep the label as \
+it is.
+Return a decision only for labels that should be filed differently from their own label \
+(mapped to an existing page, or given another canonical label), with the kind and label \
+copied exactly. Leave out every label that stays as it is.\
 """
 
 CONSOLIDATE_SYSTEM = _MIRROR_BRIEF + """
@@ -124,7 +129,10 @@ too thin or too speculative to deserve a claim, leave it out: no operation is fi
 them, or ask a question when something contradicts them.
 - Put claims in the section that fits; never add to "Earlier" (supersede moves old claims \
 there). Do not repeat a claim that already exists on the page in other words: support it.
-- Dates (valid_from, valid_to) are YYYY-MM-DD, YYYY-MM or YYYY.\
+- Dates (valid_from, valid_to) are YYYY-MM-DD, YYYY-MM or YYYY.
+- Refs like o3 and claim ids are for the operations only. Never write them in a claim or \
+a question: {owner} reads those and does not know the refs. Quote or describe what the \
+material says instead.\
 """
 
 CORE_SYSTEM = _MIRROR_BRIEF + """
@@ -156,7 +164,8 @@ health or tastes at all, years with no events); claims that seem to contradict e
 uncertain claims worth checking; things that are probably outdated. Write at most 10 \
 questions, the most useful first. Each is one open, friendly question addressed to {owner} \
 as "you", answerable from memory in a few sentences, specific enough to produce new facts, \
-and not already on the waiting list. Give the page key it concerns when there is one.\
+and not already on the waiting list. Give the page key it concerns when there is one. \
+Write every question in the one language most of the self-model is in.\
 """
 
 

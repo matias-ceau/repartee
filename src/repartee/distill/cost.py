@@ -29,6 +29,9 @@ class Spend:
         self.requests += 1
         self.input_tokens += tokens_in
         self.output_tokens += usage.output_tokens
+        if usage.cost_usd is not None:  # the provider's own figure
+            self.cost_usd += usage.cost_usd
+            return
         # prompt-cache reads bill at about a tenth of input, writes at about 1.25 times
         billed_in = round(usage.input_tokens + 0.1 * usage.cache_read_tokens
                           + 1.25 * usage.cache_write_tokens)

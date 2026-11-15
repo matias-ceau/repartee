@@ -89,6 +89,9 @@ class Usage(BaseModel):
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    #: What the provider says it charged, when it says (OpenRouter does). Preferred over
+    #: an estimate from token counts, since the price depends on who served the request.
+    cost_usd: float | None = None
 
 
 StopReason = Literal["end_turn", "tool_use", "max_tokens", "refusal"]

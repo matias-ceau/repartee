@@ -397,10 +397,33 @@ async def test_openai_non_schema_bad_request_is_an_error():
     assert not isinstance(info.value, LLMUnavailable)
 
 
-async def test_openai_structured_cut_off_raises():
-    client, _ = client_with(completion('{"title": ', finish_reason="length"))
+async def test_openai_structured_cut_off_twice_raises():
+    cut = completion('{"title": ', finish_reason="length")
+    client, sdk = client_with(cut, cut)
     with pytest.raises(LLMError, match="max_tokens"):
-        await client.complete(ask(output_schema=Notes))
+        await client.complete(ask(output_schema=Notes, max_tokens=1000))
+    assert [c["max_tokens"] for c in sdk.calls] == [1000, 2000]
+
+
+async def test_openai_structured_cut_off_retries_with_more_room_and_counts_both():
+    priced = {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "cost": 0.25}
+    client, sdk = client_with(
+        completion('{"title": ', finish_reason="length", usage=priced),
+        completion('{"title": "done"}', usage=priced),
+    )
+    response = await client.complete(ask(output_schema=Notes, max_tokens=40_000))
+    assert response.parsed == Notes(title="done")
+    assert [c["max_tokens"] for c in sdk.calls] == [40_000, 64_000]
+    assert response.usage.output_tokens == 10
+    assert response.usage.cost_usd == pytest.approx(0.5)
+
+
+async def test_openai_usage_cost_is_read_when_given():
+    client, _ = client_with(completion("hi", usage={"prompt_tokens": 3, "completion_tokens": 1,
+                                                    "total_tokens": 4, "cost": 0.0002}))
+    assert (await client.complete(ask())).usage.cost_usd == pytest.approx(0.0002)
+    client, _ = client_with(completion("hi"))
+    assert (await client.complete(ask())).usage.cost_usd is None
 
 
 # ---------------------------------------------------------------------- stop reasons, usage

@@ -15,6 +15,7 @@ Order of rules, per observation:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import Counter
 from collections.abc import Iterable, Sequence
@@ -47,7 +48,8 @@ CATCH_ALL_TITLES: dict[PageKind, str] = {
     PageKind.BEHAVIOUR: "Other patterns",
     PageKind.HEALTH: "Other health notes",
 }
-MAX_ROUTE_LABELS = 400  # labels per route request; the rest are filed as they are
+MAX_ROUTE_LABELS = 1200  # labels asked about per run; the rest are filed as they are
+ROUTE_BATCH = 150  # labels per route request
 MAX_PAGES_LISTED = 300  # existing pages per kind shown to the route request
 
 _YEAR = regex.compile(r"^(\d{4})")
@@ -111,19 +113,30 @@ def _ensure_page(model: SelfModel, routing: Routing, kind: PageKind, slug: str, 
 
 
 def chat_person(label: str, people: Iterable[str]) -> str | None:
-    """The chat participant a label names (full name, or the start of it); None if no match.
+    """The chat participant a label names; None if no match.
 
-    When the label is the start of several names, the label itself is returned: it is a
-    participant, but which one is unclear.
+    A label matches a participant when one name is the start of the other: "Léo" names
+    "Léo Garnier", and "Elliot Price" names a contact saved as "Elliot". When the label
+    is the start of several names, the label itself is returned: it is a participant,
+    but which one is unclear.
     """
     want = norm_label(label).split()
     if not want:
         return None
-    found = {person for person in people
-             if norm_label(person).split()[: len(want)] == want}
+    named = [(person, norm_label(person).split()) for person in people]
+    found = {person for person, words in named if words and words[: len(want)] == want}
     if len(found) == 1:
         return found.pop()
-    return label if found else None
+    if found:
+        return label
+    # The label is longer than the saved name: take the longest name it starts with.
+    longer = [(len(words), person) for person, words in named
+              if words and want[: len(words)] == words]
+    if not longer:
+        return None
+    longest = max(n for n, _ in longer)
+    best = [person for n, person in longer if n == longest]
+    return best[0] if len(best) == 1 else None
 
 
 def _route_request(model: SelfModel, groups: list[_Group], owner: OwnerConfig) -> LLMRequest:
@@ -149,7 +162,7 @@ def _route_request(model: SelfModel, groups: list[_Group], owner: OwnerConfig) -
         system=[SystemBlock(text=fill(ROUTE_SYSTEM, owner.name), cache=True)],
         messages=[Message(role="user", text="\n".join(lines))],
         output_schema=RouteResult,
-        max_tokens=8000,
+        max_tokens=16000,
     )
 
 
@@ -235,26 +248,53 @@ def _worth_asking(model: SelfModel, groups: list[_Group]) -> bool:
                for kind, n in per_kind.items())
 
 
+def _batches(model: SelfModel, groups: list[_Group]) -> list[list[_Group]]:
+    """Groups worth asking about, one kind per batch, at most ROUTE_BATCH labels each.
+
+    Labels can only merge within a kind, so splitting by kind loses nothing; a long
+    reply is what makes a weaker model stop short.
+    """
+    by_kind: dict[PageKind, list[_Group]] = {}
+    for group in groups[:MAX_ROUTE_LABELS]:
+        by_kind.setdefault(group.kind, []).append(group)
+    out: list[list[_Group]] = []
+    for kind_groups in by_kind.values():
+        if not _worth_asking(model, kind_groups):
+            continue
+        for start in range(0, len(kind_groups), ROUTE_BATCH):
+            out.append(kind_groups[start:start + ROUTE_BATCH])
+    return out
+
+
+async def _ask(model: SelfModel, batch: list[_Group], owner: OwnerConfig, llm: LLMClient,
+               routing: Routing, spend: Spend | None) -> list[RouteDecision]:
+    try:
+        response = await llm.complete(_route_request(model, batch, owner))
+    except Exception as error:  # noqa: BLE001 - routing works without the merge
+        routing.errors.append(f"route: {error}")
+        return []
+    if spend is not None:
+        spend.add("bulk", response)
+    if not isinstance(response.parsed, RouteResult):
+        routing.errors.append("route: the reply had no decisions")
+        return []
+    return response.parsed.decisions
+
+
 async def _merge_labels(model: SelfModel, groups: list[_Group], owner: OwnerConfig,
                         llm: LLMClient | None, routing: Routing,
                         spend: Spend | None) -> list[_Group]:
     """Ask the model which labels are the same subject; on any failure, keep them apart."""
-    if llm is None or not _worth_asking(model, groups):
+    if llm is None:
         return groups
-    asked = groups[:MAX_ROUTE_LABELS]
-    try:
-        response = await llm.complete(_route_request(model, asked, owner))
-    except Exception as error:  # noqa: BLE001 - routing works without the merge
-        routing.errors.append(f"route: {error}")
+    batches = _batches(model, groups)
+    if not batches:
         return groups
-    if spend is not None:
-        spend.add("bulk", response)
-    result = response.parsed
-    if not isinstance(result, RouteResult):
-        routing.errors.append("route: the reply had no decisions")
-        return groups
+    replies = await asyncio.gather(*(_ask(model, batch, owner, llm, routing, spend)
+                                     for batch in batches))
+    decided = [d for reply in replies for d in reply]
 
-    decisions = {(d.kind.strip().lower(), norm_label(d.label)): d for d in result.decisions}
+    decisions = {(d.kind.strip().lower(), norm_label(d.label)): d for d in decided}
     out: dict[tuple[PageKind, str], _Group] = {}
     for group in groups:
         decision = decisions.get((str(group.kind), norm_label(group.display)))

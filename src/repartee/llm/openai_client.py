@@ -55,6 +55,7 @@ from repartee.llm.base import (
 )
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+MAX_RETRY_TOKENS = 64_000  # ceiling for the one retry of a cut-off structured reply
 OPENROUTER_FIX = "Set OPENROUTER_API_KEY to an OpenRouter key (https://openrouter.ai/keys)."
 OPENAI_FIX = (
     "Set OPENAI_API_KEY (any value for a local server without auth), and OPENAI_BASE_URL "
@@ -218,7 +219,19 @@ class OpenAIClient(LLMClient):
             data = await self._create(self.build_params(request, json_mode=True))
             self.json_mode_models.add(model)
 
-        response = self.to_response(data, request)
+        try:
+            response = self.to_response(data, request)
+        except _Truncated:
+            # Smaller models sometimes run long (or repeat themselves); one more try with
+            # room to finish. A second cut-off is reported as it is.
+            room = min(request.max_tokens * 2, MAX_RETRY_TOKENS)
+            if room <= request.max_tokens:
+                raise
+            request = request.model_copy(update={"max_tokens": room})
+            response = self.to_response(
+                await self._create(self.build_params(request, json_mode=json_mode)), request
+            )
+            response.usage = _add_usage(_usage(data.get("usage")), response.usage)
         try:
             response.parsed = parse_reply(response.text, request.output_schema)
             return response
@@ -308,7 +321,7 @@ class OpenAIClient(LLMClient):
             raw["reasoning_details"] = message["reasoning_details"]
 
         if request.output_schema is not None and truncated:
-            raise LLMError(
+            raise _Truncated(
                 f"structured reply for purpose {request.purpose!r} was cut off at "
                 f"max_tokens={request.max_tokens}; raise max_tokens"
             )
@@ -368,6 +381,10 @@ class OpenAIClient(LLMClient):
             raise LLMError(f"{label} API error {error.status_code}: {text}") from error
         except openai.OpenAIError as error:
             raise LLMError(f"{label} SDK error: {_one_line(error)}") from error
+
+
+class _Truncated(LLMError):
+    """A structured reply stopped at max_tokens."""
 
 
 class _SchemaRejected(Exception):
@@ -465,20 +482,26 @@ def _usage(usage: dict[str, Any] | None) -> Usage:
     cached = details.get("cached_tokens") or 0
     written = details.get("cache_write_tokens") or 0
     prompt = usage.get("prompt_tokens") or 0
+    cost = usage.get("cost")
     return Usage(
         input_tokens=max(0, prompt - cached - written),  # prompt_tokens counts them all
         output_tokens=usage.get("completion_tokens") or 0,
         cache_read_tokens=cached,
         cache_write_tokens=written,
+        cost_usd=float(cost) if isinstance(cost, int | float) else None,
     )
 
 
 def _add_usage(a: Usage, b: Usage) -> Usage:
+    cost = None
+    if a.cost_usd is not None or b.cost_usd is not None:
+        cost = (a.cost_usd or 0.0) + (b.cost_usd or 0.0)
     return Usage(
         input_tokens=a.input_tokens + b.input_tokens,
         output_tokens=a.output_tokens + b.output_tokens,
         cache_read_tokens=a.cache_read_tokens + b.cache_read_tokens,
         cache_write_tokens=a.cache_write_tokens + b.cache_write_tokens,
+        cost_usd=cost,
     )
 
 

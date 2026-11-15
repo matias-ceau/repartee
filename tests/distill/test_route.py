@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime
 
-from repartee.distill.route import RouteDecision, RouteResult, norm_label, route
+from repartee.distill.route import (
+    RouteDecision,
+    RouteResult,
+    chat_person,
+    norm_label,
+    route,
+)
 from repartee.schema import CreatePage, Observation, PageKind
 from tests.distill.helpers import OWNER, msg, one_per_chunk
 
@@ -109,3 +115,39 @@ async def test_route_person_from_chat_exempt_from_threshold(env):
     page = distiller.model.page("people/léo-garnier")
     assert page.title == "Léo Garnier" and page.aliases == ["Léo"]
     assert distiller.model.page("people/misc").title == "People in passing"
+
+
+def test_chat_person_matches_either_way_round():
+    people = ["Léo Garnier", "Elliot", "Ana", "Ana Ruiz", "Sam", "Samuel"]
+    assert chat_person("Léo", people) == "Léo Garnier"
+    assert chat_person("Elliot Price", people) == "Elliot"  # saved under a first name only
+    assert chat_person("Ana Ruiz Vidal", people) == "Ana Ruiz"  # the longest name wins
+    assert chat_person("Ana", people) == "Ana"  # start of two names: unclear, keep the label
+    assert chat_person("Marc", people) is None
+    assert chat_person("Elliotte", people) is None  # whole words only
+
+
+async def test_route_full_name_lands_on_the_chat_contact_page(env):
+    pending = [ob(1, "person", "Elliot"), ob(2, "person", "Elliot Price")]
+    routing = await _route(env, pending, people=["Elliot"])
+    assert list(routing.pages) == ["people/elliot"]
+    assert len(routing.pages["people/elliot"]) == 2
+
+
+async def test_route_asks_per_kind_in_batches_and_merges_across_them(env, monkeypatch):
+    import repartee.distill.route as route_module
+
+    monkeypatch.setattr(route_module, "ROUTE_BATCH", 2)
+    pending = [ob(1, "health", "knee"), ob(2, "health", "right knee"),
+               ob(3, "health", "knee injury"), ob(4, "topic", "jazz"), ob(5, "topic", "bebop")]
+    env.fake.on("route", RouteResult(decisions=[
+        RouteDecision(kind="health", label="right knee", canonical="knee"),
+        RouteDecision(kind="health", label="knee injury", canonical="knee"),
+    ]))
+    routing = await _route(env, pending, llm=env.fake)
+
+    requests = env.fake.calls("route")
+    assert len(requests) == 3  # health in two batches, topic in one
+    assert all("kind=topic" not in r.messages[-1].text for r in requests
+               if "kind=health" in r.messages[-1].text)
+    assert sorted(o.id for o in routing.pages["health/knee"]) == ["ob-1", "ob-2", "ob-3"]

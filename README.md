@@ -8,11 +8,12 @@ they lived, think and how they write, and then:
 - **drafts in their voice**, for them to proofread and send.
 
 It runs in a terminal, for one person, on their own machine. The thinking is
-done by a Claude model through the Anthropic API.
+done by a Claude model through the Anthropic API, or by any model on OpenRouter
+or an OpenAI-compatible server.
 
-> Status: the whole pipeline is built and tested against a fictional sample
-> person with a scripted stand-in for the model. It has **not yet been run
-> against the real API or real data**. See [What is verified](#what-is-verified).
+> Status: the whole pipeline has run end to end on a fictional sample person
+> through OpenRouter with a small model. It has **not yet been run on real
+> data or against the Anthropic API**. See [What is verified](#what-is-verified).
 
 ## How it works
 
@@ -47,7 +48,8 @@ anything you write yourself is never touched.
 - Repartee refuses to use a home placed inside another repository, and ships a
   pre-commit hook (`scripts/pre-commit`) that blocks chat exports, home data
   and API keys from being committed here.
-- Your material **is sent to the Anthropic API** for processing. Nothing is
+- Your material **is sent to the model provider** (Anthropic, or OpenRouter and
+  whoever serves the model there) for processing. Nothing is
   kept local-only. If that is not acceptable for some of your data, do not add
   it as a source.
 
@@ -56,6 +58,13 @@ anything you write yourself is never touched.
 ```bash
 uv sync                       # or: uv pip install -e .
 export ANTHROPIC_API_KEY=...  # only needed for the steps that call the model
+```
+
+To use OpenRouter instead, set `OPENROUTER_API_KEY` and add to `repartee.yaml`:
+
+```yaml
+provider: openrouter
+models: {bulk: z-ai/glm-5.3-flash, smart: z-ai/glm-5.3-flash, chat: z-ai/glm-5.3-flash}
 ```
 
 Try it on the bundled fictional person first:
@@ -124,8 +133,15 @@ model at that model's price (Anthropic's server-side fallback).
 - The real commands were run by hand on a copy of the sample person, up to the
   point where a model is needed: ingest (with the real embedding model),
   status, the cost estimate, the statistics-only style cards.
-- The model is replaced by a scripted fake in those tests. Prompts, costs and
-  answer quality against the real API are untested.
+- The model is replaced by a scripted fake in those tests.
+- The sample person was run for real through OpenRouter with `z-ai/glm-5.3-flash`:
+  1,162 items, 69 pages, about 550 claims, 17 open questions, style cards for two
+  registers, for about $0.09 and 11 minutes. Answers were grounded in the material
+  and said so when something never happened; a draft to a friend came out in her
+  casual French register. On OpenRouter the reported cost is the provider's own
+  figure; the dry-run estimate uses the cheapest listed price and can be several
+  times low.
+- Prompts, costs and answer quality against the Anthropic API are untested.
 - The WhatsApp parser handles the common export variants in several languages
   and reports any line it cannot place, but it was written without a real
   export to check against. Run `repartee ingest` and read the report.

@@ -26,7 +26,7 @@ answers and drafts in that person's voice. Design:
 - `selfmodel/`: markdown pages of claims, owner-edit reconciliation, validated operations
 - `distill/`: extract → route → consolidate → core → gaps (model calls)
 - `voice/`: style statistics, style cards, sample picking, drafter
-- `llm/`: the model protocol, Anthropic client, scripted fake, cache
+- `llm/`: the model protocol, Anthropic and OpenAI-compatible clients, scripted fake, cache
 - `mirror/`: the agent loop, tools, chat / draft / interview / review
 - `evals/`: blind voice test, style distance, recall
 - `runtime.py`, `sync.py`: wiring; `cli.py`, `tui/`: interfaces
@@ -61,10 +61,10 @@ answers and drafts in that person's voice. Design:
   - No sensitive data in config files that will be in Git repo
 
 ## Model Preferences
-- Anthropic only for now; every tier (`bulk`, `smart`, `chat`) defaults to `claude-opus-5-5`
+- Anthropic by default (OpenRouter and OpenAI-compatible servers via `provider:`); every tier (`bulk`, `smart`, `chat`) defaults to `claude-opus-5-5`
 - Tiers are set per home in `repartee.yaml`; a cheaper `bulk` model cuts extraction cost
 - Before writing code that calls the Claude API, load the `claude-api` skill: request shapes change
-- Future: other providers and local models behind the same protocol
+- Local models: point `provider: openai` at a compatible server with OPENAI_BASE_URL
 
 ## Memory System Design
 - A compact core summary is always in context; everything else is fetched on demand through tools

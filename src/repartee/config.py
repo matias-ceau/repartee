@@ -27,6 +27,10 @@ DEFAULT_MODEL = "claude-opus-5-5"
 
 SourceType = Literal["whatsapp", "vault", "writing", "tastes"]
 Tier = Literal["bulk", "smart", "chat"]
+#: Who serves the models. "openrouter" and "openai" speak the OpenAI chat API;
+#: "openai" takes its endpoint and key from OPENAI_BASE_URL / OPENAI_API_KEY, so it
+#: also covers any compatible server, including a local one.
+Provider = Literal["anthropic", "openrouter", "openai"]
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
 
@@ -90,7 +94,8 @@ class GitConfig(BaseModel):
 class HomeConfig(BaseModel):
     owner: OwnerConfig = Field(default_factory=OwnerConfig)
     sources: list[SourceConfig] = Field(default_factory=list)
-    models: ModelTiers = Field(default_factory=ModelTiers)
+    provider: Provider = "anthropic"
+    models: ModelTiers = Field(default_factory=ModelTiers)  # ids as the provider names them
     effort: EffortTiers = Field(default_factory=EffortTiers)
     embeddings: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)

@@ -151,11 +151,12 @@ def test_whatsapp_skips_system_media_deleted_english(tmp_path, owner):
         "12/03/2021, 14:06 - Ana: IMG-20210312-WA0001.jpg (file attached)\n"
         "12/03/2021, 14:07 - Ana: real text\n"
         "12/03/2021, 14:08 - Bob left\n"
+        "12/03/2021, 14:09 - Ana Ruiz is a contact\n"
     )
     items, report = _parse(tmp_path, owner, text, name="WhatsApp Chat with Trip.txt")
     assert [i.text for i in items] == ["real text"]
     assert report.unparsed_lines == 0
-    assert report.skipped["system"] == 5
+    assert report.skipped["system"] == 6
     assert report.skipped["media"] == 2
     assert report.skipped["deleted"] == 2
 

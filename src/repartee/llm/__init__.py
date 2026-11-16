@@ -84,7 +84,9 @@ def get_client(config: HomeConfig, cache_dir: Path | None = None) -> LLMClient:
                 pricing.register_openrouter_prices(
                     [getattr(config.models, tier) for tier in tiers], Path(cache_dir)
                 )
-        client = OpenAIClient(config.models, config.effort, provider=config.provider)
+        routing = config.openrouter.preferences() if config.provider == "openrouter" else {}
+        client = OpenAIClient(config.models, config.effort, provider=config.provider,
+                              routing=routing)
 
         def model_for(tier: str) -> str:
             model = f"{config.provider}:{getattr(config.models, tier)}"

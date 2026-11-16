@@ -104,6 +104,8 @@ SYSTEM_EVENTS: list[tuple[str, str]] = [
     ("en", rf"{_A} (?:started|ended) a (?:voice |video )?call.*"),
     ("en", r"(?:missed )?(?:group )?(?:voice|video) call\b.*"),
     ("en", r"disappearing messages .*"),
+    ("en", rf"{_A} is a contact"),  # notice at the top of a chat with a saved contact
+    ("fr", rf"{_A} (?:est|fait partie de) (?:un|vos) contacts?"),
     ("fr", rf"{_A} (?:a|avez) créé (?:le |ce )?groupe.*"),
     ("fr", rf"{_A} (?:a|avez) (?:ajouté|retiré|supprimé|exclu|changé|modifié|réinitialisé) .+"),
     ("fr", rf"{_A} (?:vous|t'|t’) ?a (?:ajouté|retiré)e?"),

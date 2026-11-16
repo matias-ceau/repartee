@@ -85,6 +85,24 @@ def ask(text="hello", **kwargs) -> LLMRequest:
 # ---------------------------------------------------------------------- requests
 
 
+async def test_openai_sends_openrouter_routing_preferences():
+    from repartee.config import HomeConfig, OpenRouterConfig
+
+    assert OpenRouterConfig().preferences() == {}
+    prefs = OpenRouterConfig(zdr=True, data_collection="deny").preferences()
+    assert prefs == {"zdr": True, "data_collection": "deny"}
+    assert HomeConfig.model_validate({"openrouter": {"zdr": True}}).openrouter.zdr
+
+    sdk = StubOpenAI(completion("hi"))
+    client = OpenAIClient(ModelTiers(bulk=GLM, smart=GLM, chat=GLM), EffortTiers(), client=sdk,
+                          provider="openrouter", routing=prefs)
+    await client.complete(ask())
+    assert sdk.calls[0]["extra_body"]["provider"] == {"zdr": True, "data_collection": "deny"}
+    client, sdk = client_with(completion("hi"))
+    await client.complete(ask())
+    assert "provider" not in sdk.calls[0]["extra_body"]
+
+
 async def test_openai_builds_request_from_tier():
     models = ModelTiers(bulk="a/bulk", smart="a/smart", chat="a/chat")
     effort = EffortTiers(bulk="low", smart="xhigh", chat="medium")

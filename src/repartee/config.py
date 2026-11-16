@@ -70,6 +70,25 @@ class EffortTiers(BaseModel):
     chat: Effort = "medium"
 
 
+class OpenRouterConfig(BaseModel):
+    """Which OpenRouter hosts may serve a request (its provider preferences)."""
+
+    zdr: bool = False  # only hosts with zero data retention: nothing kept after the reply
+    data_collection: Literal["allow", "deny"] = "allow"  # "deny": no host that stores or trains
+    sort: Literal["price", "throughput", "latency"] | None = None
+
+    def preferences(self) -> dict[str, Any]:
+        """The ``provider`` object of an OpenRouter request; empty when nothing is set."""
+        prefs: dict[str, Any] = {}
+        if self.zdr:
+            prefs["zdr"] = True
+        if self.data_collection == "deny":
+            prefs["data_collection"] = "deny"
+        if self.sort:
+            prefs["sort"] = self.sort
+        return prefs
+
+
 class EmbeddingConfig(BaseModel):
     enabled: bool = True
     model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -97,6 +116,7 @@ class HomeConfig(BaseModel):
     provider: Provider = "anthropic"
     models: ModelTiers = Field(default_factory=ModelTiers)  # ids as the provider names them
     effort: EffortTiers = Field(default_factory=EffortTiers)
+    openrouter: OpenRouterConfig = Field(default_factory=OpenRouterConfig)
     embeddings: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     distill: DistillConfig = Field(default_factory=DistillConfig)

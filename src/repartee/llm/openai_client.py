@@ -55,6 +55,7 @@ from repartee.llm.base import (
 )
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_RETRIES = 6
 MAX_RETRY_TOKENS = 64_000  # ceiling for the one retry of a cut-off structured reply
 OPENROUTER_FIX = "Set OPENROUTER_API_KEY to an OpenRouter key (https://openrouter.ai/keys)."
 OPENAI_FIX = (
@@ -98,7 +99,10 @@ def make_sdk_client(provider: str) -> openai.AsyncOpenAI:
         key = os.environ.get("OPENROUTER_API_KEY", "").strip()
         if not key:
             raise LLMUnavailable(f"No OpenRouter key found. {OPENROUTER_FIX}")
-        return openai.AsyncOpenAI(api_key=key, base_url=OPENROUTER_BASE_URL)
+        # Free models are rate-limited per minute and shared hosts drop requests now and
+        # then; the SDK backs off between attempts (honouring Retry-After).
+        return openai.AsyncOpenAI(api_key=key, base_url=OPENROUTER_BASE_URL,
+                                  max_retries=OPENROUTER_RETRIES)
     try:
         return openai.AsyncOpenAI()
     except openai.OpenAIError as error:
@@ -115,10 +119,13 @@ class OpenAIClient(LLMClient):
         client: Any | None = None,
         *,
         provider: str = "openai",
+        routing: dict[str, Any] | None = None,
     ) -> None:
         self.models = models
         self.effort = effort
         self.provider = provider
+        #: OpenRouter provider preferences sent with every request (e.g. {"zdr": True}).
+        self.routing = dict(routing or {})
         self.sdk = client if client is not None else make_sdk_client(provider)
         #: Models whose provider rejected a JSON-schema response format: JSON mode instead.
         self.json_mode_models: set[str] = set()
@@ -172,6 +179,8 @@ class OpenAIClient(LLMClient):
             params["max_tokens"] = request.max_tokens
             effort = OPENROUTER_EFFORT.get(str(getattr(self.effort, request.tier)), "medium")
             params["extra_body"] = {"reasoning": {"effort": effort}}
+            if self.routing:
+                params["extra_body"]["provider"] = dict(self.routing)
         else:
             params["max_completion_tokens"] = request.max_tokens
         if request.tools:

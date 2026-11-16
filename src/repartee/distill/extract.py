@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from repartee.config import OwnerConfig
 from repartee.distill.prompts import EXTRACT_SYSTEM, fill
+from repartee.ingest.chunking import context_text
 from repartee.llm.base import LLMRequest, Message, SystemBlock
 from repartee.schema import Chunk, Item, Kind, Observation, SubjectKind, stable_hash
 
@@ -26,11 +27,13 @@ SOURCE_PRIOR: dict[Kind, float] = {
     Kind.DRAFT: 0.6,
     Kind.MESSAGE: 0.6,
     Kind.MIRROR: 0.5,
+    Kind.ASSISTANT: 0.6,
 }
 #: Applied when none of an observation's evidence was written by the owner.
 OTHERS_ONLY_FACTOR = 0.7
-#: Kinds where only the owner's turns may be evidence (the other speaker is the mirror).
-OWNER_ONLY_KINDS = {Kind.INTERVIEW, Kind.MIRROR}
+#: Kinds where only the owner's turns may be evidence (the other speaker is the mirror,
+#: or an AI assistant in an exported conversation).
+OWNER_ONLY_KINDS = {Kind.INTERVIEW, Kind.MIRROR, Kind.ASSISTANT}
 
 EXTRACT_MAX_TOKENS = 8000
 
@@ -47,6 +50,7 @@ _KIND_LABEL: dict[Kind, str] = {
     Kind.TASTE: "a list of tastes (music, books or similar)",
     Kind.MIRROR: "a conversation with the mirror",
     Kind.DRAFT: "a text I wrote and sent",
+    Kind.ASSISTANT: "a conversation I had with an AI assistant",
 }
 
 
@@ -89,7 +93,10 @@ def render_chunk(chunk: Chunk, items: list[Item], owner: OwnerConfig) -> str:
         if chunk.end and f"{chunk.end:%Y-%m-%d}" != span:
             span += f" to {chunk.end:%Y-%m-%d}"
         head.append(f"Dates: {span}")
-    if owner_only:
+    if chunk.kind == Kind.ASSISTANT:
+        head.append("Speakers: \"me\" is me; \"assistant\" is an AI assistant, whose turns "
+                    "are context only and never evidence.")
+    elif owner_only:
         head.append("Speakers: \"me\" is me; \"mirror\" is the mirror, whose turns are "
                     "context only and never evidence.")
     elif people:
@@ -101,6 +108,8 @@ def render_chunk(chunk: Chunk, items: list[Item], owner: OwnerConfig) -> str:
     for item in items:
         if item.is_self:
             who = "me"
+        elif chunk.kind == Kind.ASSISTANT:
+            who = "assistant (context only)"
         elif owner_only:
             who = "mirror (context only)"
         else:
@@ -109,7 +118,10 @@ def render_chunk(chunk: Chunk, items: list[Item], owner: OwnerConfig) -> str:
         if item.timestamp is not None:
             stamp = (f"{item.timestamp:%Y-%m-%d %H:%M} " if chunk.kind == Kind.MESSAGE
                      else f"{item.timestamp:%Y-%m-%d} ")
-        text = _item_text(item, chunk.text).strip()
+        if item.kind == Kind.ASSISTANT and not item.is_self:
+            text = context_text(item).strip()  # clipped, as in the chunk
+        else:
+            text = _item_text(item, chunk.text).strip()
         if chunk.kind == Kind.MESSAGE or owner_only:
             lines.append(f"[{item.id}] {stamp}{who}: {text}")
         else:

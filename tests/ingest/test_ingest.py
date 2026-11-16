@@ -12,7 +12,7 @@ from .test_internal import DRAFT, TRANSCRIPT
 
 
 def test_adapters_registered():
-    assert set(ADAPTERS) == {"whatsapp", "vault", "writing", "tastes"}
+    assert set(ADAPTERS) == {"whatsapp", "vault", "writing", "tastes", "assistant"}
 
 
 def test_holdout_only_on_owner_text_kinds(tmp_path, owner):

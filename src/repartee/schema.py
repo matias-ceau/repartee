@@ -58,6 +58,7 @@ class Kind(StrEnum):
     TASTE = "taste"  # music, books, ...
     MIRROR = "mirror"  # one turn of a session with the mirror
     DRAFT = "draft"  # final text of an accepted draft
+    ASSISTANT = "assistant"  # one turn of an exported conversation with an AI assistant
 
 
 #: Short prefix per source for item ids.
@@ -66,6 +67,7 @@ ID_PREFIX: dict[str, str] = {
     "vault": "nt",
     "writing": "wr",
     "tastes": "ts",
+    "assistant": "ai",
     "interviews": "iv",
     "conversations": "mr",
     "drafts": "dr",

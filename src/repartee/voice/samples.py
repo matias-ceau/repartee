@@ -13,7 +13,12 @@ from repartee.schema import Item, Kind, SearchFilters
 from repartee.store.corpus import Corpus
 from repartee.store.embed import fold
 from repartee.store.search import name_key
-from repartee.voice.registers import LONGFORM_CHANNELS, is_chat_register, register_of
+from repartee.voice.registers import (
+    LONGFORM_CHANNELS,
+    is_chat_register,
+    register_of,
+    voice_item,
+)
 from repartee.voice.stylometry import tokenize
 
 #: Score weights. A text written to the same person outweighs one on the same subject,
@@ -41,7 +46,10 @@ def register_items(corpus: Corpus, register_name: str) -> list[Item]:
     out = []
     for f in filters:
         for item in corpus.iter_items(f, holdout=False):
-            if not item.holdout and item.text.strip() and register_of(item) == register_name:
+            if item.holdout or register_of(item) != register_name:
+                continue
+            item = voice_item(item)
+            if item.text.strip():
                 out.append(item)
     return out
 

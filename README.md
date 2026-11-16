@@ -25,7 +25,8 @@ your material ──ingest──▶ searchable index ──distill──▶ self
 ```
 
 1. **Ingest** turns WhatsApp exports, an Obsidian vault, journal, essays,
-   medical notes and taste lists into normalized items. No model involved.
+   medical notes, taste lists and exported conversations with AI assistants
+   (Claude.ai, ChatGPT) into normalized items. No model involved.
 2. **Store** indexes them for keyword and meaning search (SQLite plus a local
    multilingual embedding model).
 3. **Distill** has the model read the material and write a **self-model**:
@@ -90,7 +91,10 @@ repartee
 
 Put WhatsApp exports (`_chat.txt` files, folders or zips) under
 `sources/whatsapp/`, or point a source at an existing folder such as your
-Obsidian vault.
+Obsidian vault. Claude.ai and ChatGPT data exports (the zip, its folder, or
+`conversations.json`) go under a `type: assistant` source: only your own turns
+count as evidence or voice, the assistant's are kept as clipped context, and
+turns that are mostly pasted code, logs or text are left out of the voice.
 
 ## Commands
 

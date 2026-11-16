@@ -175,9 +175,9 @@ SPECS: dict[str, ToolSpec] = {spec.name: spec for spec in [
             query=_text("Words or a description of what to find."),
             person=_nullable("Only material involving this person (a name)."),
             source=_nullable(
-                "Only this source (whatsapp, vault, writing, tastes, interviews, "
+                "Only this source (whatsapp, vault, writing, tastes, assistant, interviews, "
                 "conversations, drafts) or this kind (message, note, journal, essay, "
-                "interview, medical, taste, mirror, draft)."),
+                "interview, medical, taste, mirror, draft, assistant)."),
             after=_nullable("Only material from this date on: YYYY, YYYY-MM or YYYY-MM-DD."),
             before=_nullable("Only material before this date: YYYY, YYYY-MM or YYYY-MM-DD."),
             author=_nullable("'self' for what the owner wrote, 'other' for what others wrote.",
@@ -462,6 +462,9 @@ class Toolbox:
                 f"{fmt_span(chunk.start, chunk.end)}{people}")
         if chunk.kind in (Kind.MIRROR, Kind.INTERVIEW):
             head += f" (a session with the mirror: only {self.owner}'s lines are memories)"
+        elif chunk.kind == Kind.ASSISTANT:
+            head += (f" (a conversation with an AI assistant: only {self.owner}'s lines are "
+                     f"memories; the assistant's are clipped)")
         return head
 
     def _read_memory(self, args: _ReadMemory) -> ToolOutcome:

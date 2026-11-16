@@ -38,6 +38,8 @@ sources: []
 #     path: sources/writing
 #   - type: tastes              # music and book lists (CSV, JSON, markdown)
 #     path: sources/tastes
+#   - type: assistant           # Claude.ai or ChatGPT exports (zip, folder, conversations.json)
+#     path: sources/assistant   # only your own turns count; the assistant's are context
 
 # models: {{bulk: claude-opus-5-5, smart: claude-opus-5-5, chat: claude-opus-5-5}}
 # effort: {{bulk: low, smart: high, chat: medium}}

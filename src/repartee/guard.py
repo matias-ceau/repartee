@@ -12,7 +12,7 @@ Two safety nets:
 Rules, by name:
 
 - ``chat-export-name``: ``_chat.txt``, ``WhatsApp Chat…``, ``Discussion WhatsApp…``,
-  ``*.whatsapp.txt``.
+  ``*.whatsapp.txt``, ``conversations.json`` (Claude.ai and ChatGPT exports).
 - ``chat-export-lines``: three or more lines shaped like chat export messages
   (iOS ``[date, time] Name: text`` or Android ``date, time - Name: text``).
 - ``home-config``: a ``repartee.yaml``.
@@ -177,7 +177,7 @@ def _name_findings(path: str) -> list[Finding]:
         found.append(Finding(path=path, line=None, rule=rule, detail=detail))
 
     if (lower == "_chat.txt" or lower.startswith(("whatsapp chat", "discussion whatsapp"))
-            or lower.endswith(".whatsapp.txt")):
+            or lower.endswith(".whatsapp.txt") or lower == "conversations.json"):
         add("chat-export-name", "file name of a chat export; personal data belongs in the home")
     if (lower == ".env" or lower in {".pypirc", ".netrc"} or lower in _SSH_KEYS
             or (lower.startswith(".env.") and lower[5:] not in _ENV_TEMPLATES)):

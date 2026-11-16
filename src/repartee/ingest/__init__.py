@@ -12,6 +12,7 @@ from pathlib import Path
 
 from repartee.config import HomeConfig, OwnerConfig, SourceConfig
 from repartee.home import Home
+from repartee.ingest.assistant import AssistantAdapter
 from repartee.ingest.base import (
     ParseReport,
     SourceAdapter,
@@ -46,10 +47,11 @@ ADAPTERS: dict[str, SourceAdapter] = {
     "vault": MarkdownAdapter("vault"),
     "writing": MarkdownAdapter("writing"),
     "tastes": TastesAdapter(),
+    "assistant": AssistantAdapter(),
 }
 
 #: Only the owner's items of these kinds can be held out for the blind voice test.
-HOLDOUT_KINDS = {Kind.MESSAGE, Kind.ESSAY, Kind.JOURNAL, Kind.NOTE}
+HOLDOUT_KINDS = {Kind.MESSAGE, Kind.ESSAY, Kind.JOURNAL, Kind.NOTE, Kind.ASSISTANT}
 
 #: Neighbours (in the same container) a language-less item looks at to inherit one.
 LANG_WINDOW = 20

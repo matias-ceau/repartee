@@ -26,7 +26,7 @@ from repartee.schema import DraftRequest, Item, Kind, SearchFilters
 from repartee.store.corpus import Corpus
 from repartee.voice.cards import recipient_of
 from repartee.voice.drafter import Drafter
-from repartee.voice.registers import bursts, is_chat_register, register_of
+from repartee.voice.registers import bursts, is_chat_register, register_of, voice_item
 from repartee.voice.stylometry import tokenize
 
 #: Items (or brief-and-draft jobs) run at once; keeps a real run polite to the API.
@@ -138,8 +138,8 @@ def units(corpus: Corpus, *, holdout: bool, register_name: str | None = None) ->
             continue
         if is_chat_register(name) and item.kind == Kind.MESSAGE:
             candidates.setdefault(item.container, []).append(item)
-        elif eligible([item]):
-            longform.append(Unit(name, [item], chat=False))
+        elif eligible([voice_item(item)]):
+            longform.append(Unit(name, [voice_item(item)], chat=False))
 
     out: list[Unit] = []
     for container, mine in candidates.items():

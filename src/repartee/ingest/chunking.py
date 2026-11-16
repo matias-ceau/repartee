@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from repartee.config import ChunkingConfig, estimate_tokens
+from repartee.ingest.assistant import strip_code_blocks
 from repartee.schema import Chunk, Item, Kind, make_chunk_id
 
 #: Kinds whose sections of one file are merged up to the note target.
@@ -16,7 +17,12 @@ SECTIONED = {Kind.NOTE, Kind.ESSAY}
 #: Kinds chunked one item (entry) at a time.
 PER_ITEM = {Kind.JOURNAL, Kind.TASTE}
 #: Kinds chunked one container (file) at a time.
-PER_CONTAINER = {Kind.INTERVIEW, Kind.MIRROR, Kind.DRAFT, Kind.MEDICAL}
+PER_CONTAINER = {Kind.INTERVIEW, Kind.MIRROR, Kind.DRAFT, Kind.MEDICAL, Kind.ASSISTANT}
+#: Kinds where each item is one speaker's turn, rendered "Author: text".
+TURNS = {Kind.INTERVIEW, Kind.MIRROR, Kind.ASSISTANT}
+#: Characters of an AI assistant's turn kept in a chunk: it is context for the owner's
+#: turns, and its long replies would otherwise fill the chunk.
+ASSISTANT_CONTEXT_CHARS = 600
 
 
 @dataclass
@@ -35,6 +41,24 @@ def render_message(item: Item) -> str:
     if item.timestamp is None:
         return f"{item.author}: {item.text}"
     return f"[{item.timestamp:%Y-%m-%d %H:%M}] {item.author}: {item.text}"
+
+
+def context_text(item: Item) -> str:
+    """What a chunk shows of an item: all of it, except an AI assistant's turn, clipped.
+
+    In an assistant's turn, fenced code becomes "[code]" and the rest is cut after
+    ASSISTANT_CONTEXT_CHARS characters, at a word boundary, ending with "[…]".
+    """
+    if item.kind != Kind.ASSISTANT or item.is_self:
+        return item.text
+    text = strip_code_blocks(item.text, "[code]")
+    if len(text) <= ASSISTANT_CONTEXT_CHARS:
+        return text
+    cut = text[:ASSISTANT_CONTEXT_CHARS]
+    space = max(cut.rfind(" "), cut.rfind("\n"))
+    if space > ASSISTANT_CONTEXT_CHARS // 2:
+        cut = cut[:space]
+    return cut.rstrip() + " […]"
 
 
 def _heading(item: Item) -> str | None:
@@ -173,7 +197,9 @@ def chunk_items(items: Iterable[Item], config: ChunkingConfig) -> list[Chunk]:
             else:  # PER_CONTAINER and anything new
                 pieces = []
                 for i in run:
-                    if kind in (Kind.INTERVIEW, Kind.MIRROR):
+                    if kind == Kind.ASSISTANT and not i.is_self:
+                        pieces.append(_Piece(i, f"{i.author}: {context_text(i)}", ""))
+                    elif kind in TURNS:
                         pieces.extend(_section_pieces(i, 2 * target, f"{i.author}:", " "))
                     elif kind == Kind.MEDICAL:
                         pieces.extend(_section_pieces(i, 2 * target, _heading(i)))

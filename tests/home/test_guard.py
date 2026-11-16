@@ -144,7 +144,7 @@ def test_scan_flags_chat_export_shapes_names_and_keys() -> None:
             assert line.split(": ", 1)[1] not in found[0].detail
 
     for name in ("_chat.txt", "dump/_chat.txt", "WhatsApp Chat with Ana.txt",
-                 "x/WhatsApp Chat - Group.zip", "ana.whatsapp.txt"):
+                 "x/WhatsApp Chat - Group.zip", "ana.whatsapp.txt", "dump/conversations.json"):
         assert "chat-export-name" in rules(scan_text("", name)), name
 
     for name in (".env", "deploy/.env.production", ".pypirc", "x/.netrc"):

@@ -20,7 +20,7 @@ from repartee.schema import Item, Kind, slugify
 from repartee.selfmodel.model import SelfModel
 from repartee.store.corpus import Corpus
 from repartee.voice.prompts import STYLE_CARD_SYSTEM, StyleCardOut, style_card_prompt
-from repartee.voice.registers import bursts, is_chat_register, register_of
+from repartee.voice.registers import bursts, is_chat_register, register_of, voice_item
 from repartee.voice.samples import recipient_names
 from repartee.voice.stylometry import StyleProfile, describe, profile_items
 
@@ -153,7 +153,8 @@ class VoiceBuilder:
             if item.is_self:
                 name = register_of(item)
                 if name is not None:
-                    owned.setdefault(name, []).append(item)  # holdout included: splits bursts
+                    # holdout included: splits bursts
+                    owned.setdefault(name, []).append(voice_item(item))
             elif item.kind == Kind.MESSAGE:
                 others.setdefault(item.container, []).append(item)
 

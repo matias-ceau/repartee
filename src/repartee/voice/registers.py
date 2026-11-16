@@ -5,21 +5,29 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import datetime, timedelta
 
+from repartee.ingest.assistant import strip_code_blocks
 from repartee.schema import Item, Kind
 
-#: Channels written as documents rather than as chat messages.
-LONGFORM_CHANNELS = frozenset({"essay", "journal", "note", "interview", "mirror", "draft"})
+#: Channels written as documents rather than as chat messages. What the owner writes
+#: to an AI assistant is prose in turns, not bursts of short messages: longform.
+LONGFORM_CHANNELS = frozenset({"essay", "journal", "note", "interview", "mirror", "draft",
+                               "assistant"})
 
 #: Kinds whose channel is the kind name itself.
-_KIND_CHANNELS = {Kind.ESSAY, Kind.JOURNAL, Kind.NOTE, Kind.INTERVIEW, Kind.MIRROR, Kind.DRAFT}
+_KIND_CHANNELS = {Kind.ESSAY, Kind.JOURNAL, Kind.NOTE, Kind.INTERVIEW, Kind.MIRROR, Kind.DRAFT,
+                  Kind.ASSISTANT}
 
 #: Owner messages closer together than this, with nobody else in between, form one burst.
 BURST_GAP = timedelta(minutes=2)
 
 
 def register_of(item: Item) -> str | None:
-    """'<channel>.<lang>' for the owner's writing; None if not the owner's or no language."""
-    if not item.is_self:
+    """'<channel>.<lang>' for the owner's writing; None if not the owner's or no language.
+
+    Also None for an item ingest flagged as mostly pasted material (`meta["pasted"]`):
+    code, logs or someone else's text are not the owner's voice.
+    """
+    if not item.is_self or item.meta.get("pasted"):
         return None
     if item.kind == Kind.DRAFT:
         name = item.meta.get("register_name")
@@ -36,15 +44,26 @@ def register_of(item: Item) -> str | None:
     return f"{channel}.{item.lang.lower()}"
 
 
+def voice_item(item: Item) -> Item:
+    """The item as voice should see it: without fenced code when ingest found some.
+
+    The stored item keeps its full text for search; style statistics, cards, samples and
+    the evals use this copy.
+    """
+    if not item.meta.get("code"):
+        return item
+    return item.model_copy(update={"text": strip_code_blocks(item.text)})
+
+
 def group_by_register(items: Iterable[Item]) -> dict[str, list[Item]]:
-    """The owner's non-holdout items grouped by register, in input order."""
+    """The owner's non-holdout items grouped by register, in input order, as voice sees them."""
     groups: dict[str, list[Item]] = {}
     for item in items:
         if item.holdout:
             continue
         name = register_of(item)
         if name is not None:
-            groups.setdefault(name, []).append(item)
+            groups.setdefault(name, []).append(voice_item(item))
     return groups
 
 

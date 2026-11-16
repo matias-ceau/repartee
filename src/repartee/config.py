@@ -25,7 +25,7 @@ APP = "repartee"
 HOME_CONFIG_NAME = "repartee.yaml"
 DEFAULT_MODEL = "claude-opus-5-5"
 
-SourceType = Literal["whatsapp", "vault", "writing", "tastes"]
+SourceType = Literal["whatsapp", "vault", "writing", "tastes", "assistant"]
 Tier = Literal["bulk", "smart", "chat"]
 #: Who serves the models. "openrouter" and "openai" speak the OpenAI chat API;
 #: "openai" takes its endpoint and key from OPENAI_BASE_URL / OPENAI_API_KEY, so it

@@ -71,6 +71,10 @@ note them only when what they reveal is clear (and say what it reveals).
 - In interview and mirror-session chunks, only {owner}'s own turns count as evidence. The \
 other speaker is the mirror itself: its questions and guesses are context to understand \
 {owner}'s answers, never a source. Cite only lines marked "me".
+- The same holds for conversations with an AI assistant (Claude, ChatGPT): the assistant's \
+replies are context, never facts about {owner}. What {owner} asks about is not \
+automatically about their life ("help me plan a trip to Rome" is a plan, a question about \
+history is not), so note only what their own words show.
 - Things other people say about {owner} can be noted as what they said ("Ana thinks I work \
 too much"), citing their line, unless {owner} confirms them.
 

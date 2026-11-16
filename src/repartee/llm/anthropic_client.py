@@ -152,7 +152,8 @@ class AnthropicClient(LLMClient):
     def build_params(self, request: LLMRequest, *, for_batch: bool = False) -> dict[str, Any]:
         """Keyword arguments for ``beta.messages.create`` (or one batch item's params)."""
         model = getattr(self.models, request.tier)
-        output_config: dict[str, Any] = {"effort": getattr(self.effort, request.tier)}
+        effort = getattr(self.effort, request.tier)
+        output_config: dict[str, Any] = {"effort": "low" if effort == "none" else effort}
         if request.output_schema is not None:
             output_config["format"] = {
                 "type": "json_schema",

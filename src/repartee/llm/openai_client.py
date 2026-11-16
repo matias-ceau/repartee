@@ -25,6 +25,7 @@ No app-identifying headers are sent.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import os
@@ -56,6 +57,9 @@ from repartee.llm.base import (
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 OPENROUTER_RETRIES = 6
+#: Wall-clock limit per attempt. OpenRouter keeps a slow request alive with comment
+#: lines, so the SDK's read timeout never fires on a host that has stalled.
+REQUEST_DEADLINE_S = 600
 MAX_RETRY_TOKENS = 64_000  # ceiling for the one retry of a cut-off structured reply
 OPENROUTER_FIX = "Set OPENROUTER_API_KEY to an OpenRouter key (https://openrouter.ai/keys)."
 OPENAI_FIX = (
@@ -65,6 +69,7 @@ OPENAI_FIX = (
 #: Our effort levels in OpenRouter's vocabulary (it also has "minimal" and "none").
 #: OpenRouter moves a level a model lacks to the nearest one it has.
 OPENROUTER_EFFORT: dict[str, str] = {
+    "none": "none",
     "low": "low",
     "medium": "medium",
     "high": "high",
@@ -124,6 +129,7 @@ class OpenAIClient(LLMClient):
         self.models = models
         self.effort = effort
         self.provider = provider
+        self.deadline_s: float = REQUEST_DEADLINE_S
         #: OpenRouter provider preferences sent with every request (e.g. {"zdr": True}).
         self.routing = dict(routing or {})
         self.sdk = client if client is not None else make_sdk_client(provider)
@@ -212,7 +218,16 @@ class OpenAIClient(LLMClient):
 
     async def _create(self, params: dict[str, Any], *, schema_attempt: bool = False) -> dict:
         with self._mapped_errors(schema_attempt=schema_attempt):
-            completion = await self.sdk.chat.completions.create(**params)
+            try:
+                completion = await asyncio.wait_for(
+                    self.sdk.chat.completions.create(**params), self.deadline_s
+                )
+            except TimeoutError as error:
+                raise LLMError(
+                    f"{self._label()} gave no reply from {params.get('model')} within "
+                    f"{self.deadline_s:.0f}s; the host may be overloaded. Try again later, or "
+                    "a model or effort that answers faster."
+                ) from error
         return _as_dict(completion)
 
     async def _structured(self, request: LLMRequest) -> LLMResponse:

@@ -103,6 +103,26 @@ async def test_openai_sends_openrouter_routing_preferences():
     assert "provider" not in sdk.calls[0]["extra_body"]
 
 
+async def test_openai_stalled_host_hits_the_deadline():
+    import asyncio
+
+    client, sdk = client_with()
+
+    async def stall(**kwargs):
+        await asyncio.sleep(5)
+
+    sdk.chat.completions.create = stall
+    client.deadline_s = 0.05
+    with pytest.raises(LLMError, match="no reply"):
+        await client.complete(ask())
+
+
+async def test_openai_effort_none_turns_reasoning_off():
+    client, sdk = client_with(completion("hi"), effort=EffortTiers(chat="none"))
+    await client.complete(ask(tier="chat"))
+    assert sdk.calls[0]["extra_body"]["reasoning"] == {"effort": "none"}
+
+
 async def test_openai_builds_request_from_tier():
     models = ModelTiers(bulk="a/bulk", smart="a/smart", chat="a/chat")
     effort = EffortTiers(bulk="low", smart="xhigh", chat="medium")
@@ -130,8 +150,8 @@ async def test_openai_builds_request_from_tier():
 async def test_openai_effort_levels_map_for_openrouter():
     from repartee.llm.openai_client import OPENROUTER_EFFORT
 
-    assert set(OPENROUTER_EFFORT) == {"low", "medium", "high", "xhigh", "max"}
-    assert set(OPENROUTER_EFFORT.values()) <= {"minimal", "low", "medium", "high", "xhigh", "max"}
+    assert set(OPENROUTER_EFFORT) == {"none", "low", "medium", "high", "xhigh", "max"}
+    assert set(OPENROUTER_EFFORT.values()) <= {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
 
 
 async def test_openai_provider_sends_no_reasoning_and_uses_completion_tokens():

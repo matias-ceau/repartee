@@ -31,7 +31,8 @@ Tier = Literal["bulk", "smart", "chat"]
 #: "openai" takes its endpoint and key from OPENAI_BASE_URL / OPENAI_API_KEY, so it
 #: also covers any compatible server, including a local one.
 Provider = Literal["anthropic", "openrouter", "openai"]
-Effort = Literal["low", "medium", "high", "xhigh", "max"]
+#: "none" turns reasoning off where the provider allows it (OpenRouter); Claude gets "low".
+Effort = Literal["none", "low", "medium", "high", "xhigh", "max"]
 
 
 class OwnerConfig(BaseModel):

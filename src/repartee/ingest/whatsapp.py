@@ -538,7 +538,7 @@ class WhatsAppAdapter:
 
     def discover(self, root: Path, source: SourceConfig) -> list[Path]:
         """Every .txt and .zip under root, minus excluded globs."""
-        return walk_files(root, {".txt", ".zip"}, source.exclude)
+        return walk_files(root, {".txt", ".zip"}, source.exclude, source.include)
 
     def parse(
         self,

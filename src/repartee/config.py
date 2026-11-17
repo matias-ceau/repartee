@@ -55,6 +55,7 @@ class SourceConfig(BaseModel):
     type: SourceType
     path: str  # absolute, ~-relative, or relative to the home
     exclude: list[str] = Field(default_factory=list)  # globs relative to path
+    include: list[str] = Field(default_factory=list)  # when set, only paths matching these
     kinds: dict[str, Kind] = Field(default_factory=dict)  # glob -> kind (markdown sources)
     options: dict[str, Any] = Field(default_factory=dict)  # adapter-specific, e.g. date_order
 

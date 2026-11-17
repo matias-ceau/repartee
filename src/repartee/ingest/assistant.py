@@ -403,7 +403,7 @@ class AssistantAdapter:
 
     def discover(self, root: Path, source: SourceConfig) -> list[Path]:
         """Every .json and .zip under root, minus excluded globs."""
-        return walk_files(root, {".json", ".zip"}, source.exclude)
+        return walk_files(root, {".json", ".zip"}, source.exclude, source.include)
 
     def parse(
         self,

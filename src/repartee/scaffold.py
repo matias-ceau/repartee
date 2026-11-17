@@ -30,6 +30,7 @@ sources: []
 #   - type: vault               # an Obsidian vault, may live outside the home
 #     path: ~/Documents/vault
 #     exclude: ["Templates/**"]
+#     include: ["People/**", "Books/**"]  # optional: only these paths
 #     kinds:                    # glob -> kind; frontmatter `kind:` wins
 #       "Journal/**": journal
 #       "Health/**": medical

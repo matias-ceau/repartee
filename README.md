@@ -91,7 +91,9 @@ repartee
 
 Put WhatsApp exports (`_chat.txt` files, folders or zips) under
 `sources/whatsapp/`, or point a source at an existing folder such as your
-Obsidian vault. Claude.ai and ChatGPT data exports (the zip, its folder, or
+Obsidian vault (read only; `include`/`exclude` globs pick the parts). Note
+properties (`ntype`, `aliases`, links such as `recommended_by: "[[Name]]"`) are kept
+and shown to extraction; Dataview blocks are skipped. Claude.ai and ChatGPT data exports (the zip, its folder, or
 `conversations.json`) go under a `type: assistant` source: only your own turns
 count as evidence or voice, the assistant's are kept as clipped context, and
 turns that are mostly pasted code, logs or text are left out of the voice.

@@ -107,8 +107,13 @@ def relative(path: Path, root: Path) -> str:
         return path.name
 
 
-def walk_files(root: Path, suffixes: set[str], exclude: list[str]) -> list[Path]:
-    """Files under root with one of the suffixes, sorted; follows links, skips hidden and loops."""
+def walk_files(
+    root: Path, suffixes: set[str], exclude: list[str], include: list[str] | None = None
+) -> list[Path]:
+    """Files under root with one of the suffixes, sorted; follows links, skips hidden and loops.
+
+    With `include` globs, only files matching one of them are kept; `exclude` still wins.
+    """
     if root.is_file():
         return [root] if root.suffix.lower() in suffixes else []
     if not root.is_dir():
@@ -128,6 +133,8 @@ def walk_files(root: Path, suffixes: set[str], exclude: list[str]) -> list[Path]
             path = Path(dirpath) / name
             rel = relative(path, root)
             if any(glob_match(rel, pattern) for pattern in exclude):
+                continue
+            if include and not any(glob_match(rel, pattern) for pattern in include):
                 continue
             found.append(path)
     return found

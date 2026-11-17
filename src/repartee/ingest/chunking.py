@@ -191,9 +191,16 @@ def chunk_items(items: Iterable[Item], config: ChunkingConfig) -> list[Chunk]:
                 pieces = [p for i in run for p in _section_pieces(i, target, _heading(i))]
                 chunks.extend(builder.build(g, "\n\n") for g in _merge(pieces, target, "\n\n"))
             elif kind in PER_ITEM:
+                lead: list[_Piece] = []  # a note's property line opens its first entry's chunk
                 for i in run:
+                    if i.meta.get("role") == "properties":
+                        lead = [_Piece(i, i.text, i.text)]
+                        continue
                     for p in _section_pieces(i, 2 * target, None):
-                        chunks.append(builder.build([p], "\n\n"))
+                        chunks.append(builder.build([*lead, p], "\n\n"))
+                        lead = []
+                if lead:
+                    chunks.append(builder.build(lead, "\n\n"))
             else:  # PER_CONTAINER and anything new
                 pieces = []
                 for i in run:

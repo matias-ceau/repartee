@@ -100,7 +100,7 @@ class TastesAdapter:
 
     def discover(self, root: Path, source: SourceConfig) -> list[Path]:
         """CSV, JSON, markdown and text files under root."""
-        return walk_files(root, {".csv", ".json", ".md", ".txt"}, source.exclude)
+        return walk_files(root, {".csv", ".json", ".md", ".txt"}, source.exclude, source.include)
 
     def parse(
         self,

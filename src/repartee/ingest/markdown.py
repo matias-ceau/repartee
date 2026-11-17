@@ -1,7 +1,9 @@
 """Markdown sources: an Obsidian vault, a journal, essays, medical notes.
 
 Item ids are keyed by location (path, heading trail, ordinal), never by text,
-so editing a section keeps its id.
+so editing a section keeps its id. A note with properties also gets a first item
+holding them as one line (see :mod:`repartee.ingest.vault`), keyed by its path alone.
+Dataview and query blocks are dropped from the text. Source files are only read.
 """
 
 from __future__ import annotations
@@ -25,16 +27,29 @@ from repartee.ingest.base import (
     to_datetime,
     walk_files,
 )
+from repartee.ingest.vault import (
+    body_links,
+    note_aliases,
+    note_ntype,
+    note_properties,
+    property_block,
+    property_links,
+    strip_query_blocks,
+)
 from repartee.schema import ID_PREFIX, Item, Kind, make_item_id
 
 _HEADING = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
 _FENCE = re.compile(r"^[ \t]{0,3}(```|~~~)")
 _ISO_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 _TAG = regex.compile(r"(?<![\p{L}\p{N}_&#/\]\)\[`])#([\p{L}\p{N}_/-]+)")
-_WIKILINK = re.compile(r"\[\[([^\[\]|#]*)(?:#[^\[\]|]*)?(?:\|[^\[\]]*)?\]\]")
 
 DEFAULT_KIND = {"vault": Kind.NOTE, "writing": Kind.ESSAY}
 SUFFIXES = {"vault": {".md"}, "writing": {".md", ".markdown", ".txt"}}
+#: Obsidian `ntype` values that plainly name a kind; other types stay notes.
+NTYPE_KIND = {"journal": Kind.JOURNAL, "diary": Kind.JOURNAL, "daily": Kind.JOURNAL,
+              "essay": Kind.ESSAY, "medical": Kind.MEDICAL}
+#: Key of the item holding a note's properties (a heading trail never has one part).
+PROPERTIES_KEY = "properties"
 
 
 @dataclass
@@ -87,8 +102,7 @@ def date_in_name(name: str) -> datetime | None:
 def tags_and_links(text: str) -> tuple[list[str], list[str]]:
     """Inline #tags (not purely numeric) and wikilink targets, in order, deduplicated."""
     tags = [t.strip("/-") for t in _TAG.findall(text) if not t.isdigit()]
-    links = [m.strip() for m in _WIKILINK.findall(text) if m.strip()]
-    return list(dict.fromkeys(t for t in tags if t)), list(dict.fromkeys(links))
+    return list(dict.fromkeys(t for t in tags if t)), body_links(text)
 
 
 def frontmatter_tags(value: Any) -> list[str]:
@@ -108,11 +122,11 @@ class MarkdownAdapter:
 
     def discover(self, root: Path, source: SourceConfig) -> list[Path]:
         """Markdown files under root, minus hidden folders and excluded globs."""
-        return walk_files(root, SUFFIXES[self.name], source.exclude)
+        return walk_files(root, SUFFIXES[self.name], source.exclude, source.include)
 
     def kind_for(self, rel: str, fm: dict[str, Any], source: SourceConfig,
                  report: ParseReport) -> Kind:
-        """Frontmatter `kind:` beats the config globs, which beat the source default."""
+        """Frontmatter `kind:`, then the config globs, then a plain `ntype`, then the default."""
         if "kind" in fm:
             try:
                 return Kind(str(fm["kind"]).strip().lower())
@@ -121,6 +135,9 @@ class MarkdownAdapter:
         for pattern, kind in source.kinds.items():
             if glob_match(rel, pattern):
                 return Kind(kind)
+        ntype = note_ntype(note_properties(fm))
+        if ntype in NTYPE_KIND:
+            return NTYPE_KIND[ntype]
         return DEFAULT_KIND[self.name]
 
     def parse(
@@ -134,6 +151,9 @@ class MarkdownAdapter:
         """One item per heading section; journals one per file or per dated heading."""
         rel = relative(path, root)
         fm, body = split_frontmatter(read_text(path, report), rel, report)
+        body, queries = strip_query_blocks(body)
+        if queries:
+            report.skip("query block", queries)
         kind = self.kind_for(rel, fm, source, report)
         stamp = to_datetime(fm.get("date")) or to_datetime(fm.get("created"))
         if stamp is None and ("date" in fm or "created" in fm):
@@ -143,6 +163,15 @@ class MarkdownAdapter:
         base_tags = frontmatter_tags(fm.get("tags"))
         prefix = ID_PREFIX[self.name]
         sections = split_sections(body)
+        props = note_properties(fm)
+        prop_refs = property_links(props)
+        note_meta: dict[str, Any] = {}
+        if props:
+            note_meta["properties"] = props
+            if ntype := note_ntype(props):
+                note_meta["ntype"] = ntype
+            if aliases := note_aliases(props):
+                note_meta["aliases"] = aliases
 
         entries: list[tuple[str, str | None, list[str], int, str, datetime | None]] = []
         if kind == Kind.JOURNAL:
@@ -154,12 +183,41 @@ class MarkdownAdapter:
 
         ordinals: dict[str, int] = {}
         seq = 0
+        block = property_block(props)
+        if block:
+            yield Item(
+                id=make_item_id(prefix, rel, PROPERTIES_KEY),
+                source=self.name,
+                kind=kind,
+                container=rel,
+                author=owner.name,
+                is_self=True,
+                timestamp=stamp,
+                text=block,
+                title=file_title,
+                seq=seq,
+                meta={
+                    "path": rel,
+                    "tags": base_tags,
+                    "links": list(dict.fromkeys(r["target"] for r in prop_refs)),
+                    "link_refs": prop_refs,
+                    "heading_trail": [],
+                    "level": 0,
+                    "role": "properties",
+                    # Facts the owner typed, but not prose: voice skips "pasted" items.
+                    "pasted": "properties",
+                    **note_meta,
+                },
+            )
+            seq += 1
+            report.items += 1
         for key, title, trail, level, text, when in entries:
             ordinal = ordinals.get(key, 0)
             ordinals[key] = ordinal + 1
             if not text:
                 continue
             tags, links = tags_and_links(text)
+            refs = prop_refs + [{"property": None, "target": t} for t in links]
             item = Item(
                 id=make_item_id(prefix, rel, key, ordinal),
                 source=self.name,
@@ -174,9 +232,11 @@ class MarkdownAdapter:
                 meta={
                     "path": rel,
                     "tags": list(dict.fromkeys(base_tags + tags)),
-                    "links": links,
+                    "links": list(dict.fromkeys(r["target"] for r in refs)),
+                    "link_refs": refs,
                     "heading_trail": trail,
                     "level": level,
+                    **note_meta,
                 },
             )
             seq += 1

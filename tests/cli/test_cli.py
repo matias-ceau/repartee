@@ -14,7 +14,7 @@ from repartee.llm import FakeLLM
 from repartee.llm.base import LLMRefusal
 from repartee.llm.fake import tool_call
 from repartee.runtime import open_runtime
-from repartee.schema import AddClaim, CreatePage, PageKind
+from repartee.schema import AddClaim, CreatePage, PageKind, SetFact
 from repartee.selfmodel import SelfModel
 from tests.cli.conftest import NO_KEY, one_line_error, set_config
 
@@ -336,6 +336,42 @@ def test_why_prints_claim_and_excerpts(cli, persona: Path) -> None:
     assert cli("why", f"^{claim_id}", home=persona).exit_code == 0
     line = one_line_error(cli("why", "c-nope", home=persona))
     assert "c-nope" in line
+
+
+def test_facts_review_why_and_status(cli, persona: Path) -> None:
+    assert cli("ingest", home=persona).exit_code == 0
+    with open_runtime(persona, llm=None, embedder=None) as rt:
+        item = next(i for i in rt.corpus.iter_items() if i.is_self and len(i.text) > 20)
+        model = SelfModel(rt.home.self_dir)
+        model.load()
+        results = model.apply([
+            CreatePage(kind=PageKind.PERSON, slug="lea-fontaine", title="Léa Fontaine"),
+            SetFact(page="people/lea-fontaine", slot="relation", value="friend",
+                    evidence=[item.id]),
+            SetFact(page="people/lea-fontaine", slot="born", value="1994", evidence=[item.id]),
+        ])
+        assert all(r.ok for r in results), results
+        model.save()
+
+    listed = cli("facts", home=persona)
+    assert listed.exit_code == 0, listed.output
+    assert "people/lea-fontaine:relation = friend  [inferred 0.50]" in listed.stdout
+    status = cli("status", home=persona)
+    assert "2 key facts: inferred 2" in status.stdout and "repartee facts" in status.stdout
+    why = cli("why", "people/lea-fontaine:relation", home=persona)
+    assert why.exit_code == 0, why.output
+    assert "Léa Fontaine › relation" in why.stdout and "Evidence:" in why.stdout
+    assert "people/lea-fontaine:nope" in one_line_error(
+        cli("why", "people/lea-fontaine:nope", home=persona))
+
+    done = cli("facts", "--confirm", "people/lea-fontaine:relation",
+               "--reject", "people/lea-fontaine:born", home=persona)
+    assert done.exit_code == 0, done.output
+    page = (persona / "self" / "people" / "lea-fontaine.md").read_text(encoding="utf-8")
+    assert "relation: friend" in page and "born" not in page
+    assert "No inferred key facts" in cli("facts", home=persona).stdout
+    assert "confirmed" in cli("facts", "--all", home=persona).stdout
+    assert one_line_error(cli("facts", "--confirm", "nope", home=persona))
 
 
 # -------------------------------------------------------------------- TUI, evals

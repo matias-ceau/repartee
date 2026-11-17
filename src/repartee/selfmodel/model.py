@@ -7,11 +7,19 @@ for each page a sidecar ``.claims/<page key>.json``::
      "claims": {"c-3fa91c20": {"section", "text", "status", "origin", "confidence",
                                "evidence", "valid_from", "valid_to", "created", "updated"}},
      "rejected": [{"id", "text", "norm_hash", "section", "evidence", "rejected_at",
-                   "status", "origin", "confidence", "valid_from", "valid_to", "created"}]}
+                   "status", "origin", "confidence", "valid_from", "valid_to", "created"}],
+     "facts": {"relation": {"value", "status", "origin", "confidence", "evidence",
+                            "created", "updated"}},
+     "rejected_facts": [{"slot", "value", "norm", "status", "origin", "evidence",
+                         "rejected_at"}]}
 
 The markdown is the truth for a claim's text, page and section; the sidecar holds
 what the markdown does not show, plus the text as last saved so owner edits can
-be told apart.
+be told apart. Key facts work the same way: the page's frontmatter properties are the
+truth for their values, the sidecar keeps their status, evidence and last saved value.
+"facts" and "rejected_facts" are left out when empty. A rejected entry with
+``"retracted": true`` is a claim the pipeline withdrew (owner-backed), not one the owner
+deleted; either way its text is not added again.
 """
 
 from __future__ import annotations
@@ -27,10 +35,12 @@ from pathlib import Path
 from pydantic import BaseModel, ValidationError
 
 from repartee.schema import (
+    FACT_SLOTS,
     Claim,
     ClaimOp,
     ClaimOrigin,
     ClaimStatus,
+    Fact,
     OpResult,
     PageKind,
     slugify,
@@ -41,11 +51,13 @@ from repartee.selfmodel.pages import (
     QUESTIONS_KEY,
     Page,
     clean_text,
+    has_facts,
     new_claim_id,
     new_page,
     new_question_id,
     norm_text,
     same_text,
+    value_key,
 )
 
 log = logging.getLogger(__name__)
@@ -71,6 +83,9 @@ class ReconcileReport(BaseModel):
     rejected: list[str] = []  # claim ids whose line the owner deleted
     moved: list[str] = []  # claim ids found on another page or section than before
     restored: list[str] = []  # previously rejected ids whose line came back
+    facts_edited: list[str] = []  # "page:slot" whose value the owner changed -> confirmed
+    facts_added: list[str] = []  # "page:slot" the owner wrote -> confirmed
+    facts_rejected: list[str] = []  # "page:slot" the owner deleted -> not set again
 
 
 class PruneReport(BaseModel):
@@ -114,6 +129,8 @@ class SelfModel:
         self._claims: dict[str, Claim] = {}
         self._rejected: dict[str, list[dict]] = {}
         self._disk_sidecars: dict[str, bytes] = {}
+        self._facts: dict[str, dict[str, Fact]] = {}  # page key -> slot -> fact
+        self._rejected_facts: dict[str, list[dict]] = {}
         self._sidecar_baseline: dict[str, bytes | None] = {}  # canonical form of what was read
 
     # ------------------------------------------------------------------ paths
@@ -137,13 +154,17 @@ class SelfModel:
             raw = path.read_bytes()
             self._disk_pages[key] = raw
             self._pages[key] = Page.parse(key, raw.decode(*_ENC))
-        known = self._read_sidecars()
+        stored_facts: dict[str, dict[str, Fact]] = {}
+        known = self._read_sidecars(stored_facts)
         for key in self._disk_sidecars:
             claims = [c for k, c in known.values() if k == key]
-            self._sidecar_baseline[key] = _dump_sidecar(claims, self._rejected.get(key, []))
-        return self._reconcile(known)
+            self._sidecar_baseline[key] = _dump_sidecar(
+                claims, self._rejected.get(key, []), stored_facts.get(key, {}).values(),
+                self._rejected_facts.get(key, []))
+        return self._reconcile(known, stored_facts)
 
-    def _read_sidecars(self) -> dict[str, tuple[str, Claim]]:
+    def _read_sidecars(self, stored_facts: dict[str, dict[str, Fact]]
+                       ) -> dict[str, tuple[str, Claim]]:
         known: dict[str, tuple[str, Claim]] = {}
         root = self.dir / SIDECAR_DIR
         if not root.is_dir():
@@ -169,6 +190,19 @@ class SelfModel:
                         raise ValueError(f"claim {cid} is not an object")
                     fields = {"section": "", "text": "", **meta, "id": cid, "page": key}
                     parsed[cid] = Claim.model_validate(fields)
+                facts = data.get("facts") or {}
+                rejected_facts = data.get("rejected_facts") or []
+                if not isinstance(facts, dict) or not isinstance(rejected_facts, list):
+                    raise ValueError("'facts' must be an object and 'rejected_facts' a list")
+                if not all(isinstance(r, dict) and isinstance(r.get("slot"), str)
+                           for r in rejected_facts):
+                    raise ValueError("every rejected fact needs a slot")
+                parsed_facts = {}
+                for slot, meta in facts.items():
+                    if not isinstance(meta, dict):
+                        raise ValueError(f"fact {slot} is not an object")
+                    parsed_facts[slot] = Fact.model_validate({**meta, "page": key,
+                                                              "slot": slot})
             except (ValueError, ValidationError, UnicodeError) as exc:
                 raise SelfModelError(
                     f"self/{where} cannot be read ({exc}). Fix it (a git merge conflict?) "
@@ -176,6 +210,10 @@ class SelfModel:
                 ) from exc
             self._disk_sidecars[key] = raw
             self._rejected[key] = rejected
+            if rejected_facts:
+                self._rejected_facts[key] = rejected_facts
+            if parsed_facts:
+                stored_facts[key] = parsed_facts
             for cid, claim in parsed.items():
                 if cid in known:
                     page = self._pages.get(key)
@@ -184,7 +222,8 @@ class SelfModel:
                 known[cid] = (key, claim)
         return known
 
-    def _reconcile(self, known: dict[str, tuple[str, Claim]]) -> ReconcileReport:
+    def _reconcile(self, known: dict[str, tuple[str, Claim]],
+                   stored_facts: dict[str, dict[str, Fact]]) -> ReconcileReport:
         report = ReconcileReport()
         now = _now()
         occ: dict[str, list] = {}
@@ -283,11 +322,96 @@ class SelfModel:
                 (target,) = targets
                 self._rejected.setdefault(target, []).extend(self._rejected.pop(old))
 
+        self._reconcile_facts(stored_facts, renames, report, now)
         self._reconcile_questions()
-        for name in ("edited", "added", "rejected", "moved", "restored"):
+        for name in ReconcileReport.model_fields:
             if getattr(report, name):
                 log.info("self-model: owner %s %s", name, getattr(report, name))
         return report
+
+    def _reconcile_facts(self, stored: dict[str, dict[str, Fact]],
+                         renames: dict[str, set[str]], report: ReconcileReport,
+                         now: datetime) -> None:
+        """Compare each page's properties with the facts as last saved (spec 10.3 for facts).
+
+        A changed or new property is the owner's: confirmed. A saved fact whose property is
+        gone was deleted by the owner: remembered as rejected, so it is not set again.
+        """
+        for old, targets in renames.items():  # a page the owner renamed keeps its facts
+            if old not in self._pages and len(targets) == 1 and old in stored:
+                (target,) = targets
+                moved = stored.pop(old)
+                merged = stored.setdefault(target, {})
+                for slot, fact in moved.items():
+                    merged.setdefault(slot, fact.model_copy(update={"page": target}))
+                if self._rejected_facts.get(old):
+                    self._rejected_facts.setdefault(target, []).extend(
+                        self._rejected_facts.pop(old))
+        for key in sorted(self._pages):
+            page = self._pages[key]
+            if not has_facts(page.kind):
+                continue
+            before = stored.get(key, {})
+            if not page.frontmatter_ok():
+                log.warning("self-model: the frontmatter of %s is not valid YAML; its key "
+                            "facts are kept as they were until it is fixed", key)
+                if before:
+                    self._facts[key] = dict(before)
+                continue
+            current: dict[str, Fact] = {}
+            for slot, value in page.properties().items():
+                fact = before.get(slot)
+                where = f"{key}:{slot}"
+                if fact is not None and value_key(fact.value) == value_key(value):
+                    if fact.value != value:  # same meaning, other spelling: keep the owner's
+                        fact = fact.model_copy(update={"value": value})
+                elif fact is not None:
+                    fact = fact.model_copy(update={
+                        "value": value, "status": ClaimStatus.CONFIRMED,
+                        "origin": ClaimOrigin.USER, "updated": now})
+                    report.facts_edited.append(where)
+                else:
+                    rec = self._pop_fact_rejection(key, slot, value)
+                    fact = Fact(page=key, slot=slot, value=value, status=ClaimStatus.CONFIRMED,
+                                origin=ClaimOrigin.USER, created=now, updated=now,
+                                evidence=list(rec.get("evidence", [])) if rec else [])
+                    report.facts_added.append(where)
+                current[slot] = fact
+            for slot, fact in before.items():
+                if slot not in current:
+                    self._record_fact_rejection(fact, now)
+                    report.facts_rejected.append(f"{key}:{slot}")
+            if current:
+                self._facts[key] = current
+
+    def _record_fact_rejection(self, fact: Fact, when: datetime, **extra: object) -> None:
+        records = self._rejected_facts.setdefault(fact.page, [])
+        for value in fact.values():
+            norm = " ".join(value_key(value))
+            if any(r.get("slot") == fact.slot and r.get("norm") == norm for r in records):
+                continue
+            records.append({
+                "slot": fact.slot, "value": value, "norm": norm, "status": str(fact.status),
+                "origin": str(fact.origin), "evidence": list(fact.evidence),
+                "rejected_at": when.isoformat(), **extra,
+            })
+
+    def _pop_fact_rejection(self, key: str, slot: str, value: object) -> dict | None:
+        """The owner wrote back a rejected value: forget the rejection, return its record."""
+        norms = {" ".join(value_key(v)) for v in (value if isinstance(value, list) else [value])}
+        found = None
+        records = self._rejected_facts.get(key, [])
+        for rec in list(records):
+            if rec.get("slot") == slot and rec.get("norm") in norms:
+                records.remove(rec)
+                found = found or rec
+        return found
+
+    def fact_rejected(self, key: str, slot: str, value: str) -> bool:
+        """True when this value of this slot was rejected on that page."""
+        norm = " ".join(value_key(value))
+        return any(r.get("slot") == slot and r.get("norm") == norm
+                   for r in self._rejected_facts.get(key, []))
 
     def _reconcile_questions(self) -> None:
         page = self._pages.get(QUESTIONS_KEY)
@@ -302,10 +426,12 @@ class SelfModel:
                 seen.add(new)
                 page.set_line_id(line_no, new)
 
-    def _record_rejection(self, key: str, claim: Claim, when: datetime) -> None:
+    def _record_rejection(self, key: str, claim: Claim, when: datetime,
+                          **extra: object) -> None:
         meta = claim.model_dump(mode="json", exclude={"page", "updated"})
         meta["norm_hash"] = stable_hash(norm_text(claim.text))
         meta["rejected_at"] = when.isoformat()
+        meta.update(extra)
         records = self._rejected.setdefault(key, [])
         if not any(r.get("id") == claim.id for r in records):
             records.append(meta)
@@ -324,7 +450,9 @@ class SelfModel:
     # ------------------------------------------------------------------- save
     def _sidecar_bytes(self, key: str) -> bytes | None:
         claims = [c for c in self._claims.values() if c.page == key]
-        return _dump_sidecar(claims, self._rejected.get(key, []))
+        return _dump_sidecar(claims, self._rejected.get(key, []),
+                             self._facts.get(key, {}).values(),
+                             self._rejected_facts.get(key, []))
 
     def save(self) -> None:
         """Write the pages and sidecars that changed; refuse if any changed on disk meanwhile."""
@@ -336,6 +464,8 @@ class SelfModel:
                 writes.append((self._page_file(key), new, old, "page", key))
         sidecar_keys = set(self._disk_sidecars) | {c.page for c in self._claims.values()}
         sidecar_keys |= {k for k, v in self._rejected.items() if v}
+        sidecar_keys |= {k for k, v in self._facts.items() if v}
+        sidecar_keys |= {k for k, v in self._rejected_facts.items() if v}
         for key in sorted(sidecar_keys):
             new = self._sidecar_bytes(key)
             old = self._disk_sidecars.get(key)
@@ -430,11 +560,16 @@ class SelfModel:
         self,
         ops: Sequence[ClaimOp],
         existing_evidence: Callable[[Iterable[str]], set[str]] | None = None,
+        owner_statements: Callable[[Iterable[str]], set[str]] | None = None,
     ) -> list[OpResult]:
-        """Apply pipeline operations; each refusal is an OpResult with a reason, never raised."""
+        """Apply pipeline operations; each refusal is an OpResult with a reason, never raised.
+
+        ``owner_statements`` picks, from evidence ids, the owner's own interview or
+        mirror-session turns: those confirm a fact and can back a retraction.
+        """
         from repartee.selfmodel.ops import apply_ops
 
-        return apply_ops(self, ops, existing_evidence)
+        return apply_ops(self, ops, existing_evidence, owner_statements)
 
     def _owner_claim(self, claim_id: str) -> Claim:
         claim = self._claims.get(claim_id)
@@ -468,11 +603,59 @@ class SelfModel:
         claim.text, claim.status, claim.origin, claim.updated = (
             clean, ClaimStatus.CONFIRMED, ClaimOrigin.USER, _now())
 
+    # ------------------------------------------------------------------ facts
+    def facts(self, page: str | None = None, status: ClaimStatus | None = None) -> list[Fact]:
+        """Copies of the key facts, by page then slot (known slots first), optionally filtered."""
+        order = list(FACT_SLOTS)
+        out = []
+        for key in sorted(self._facts):
+            if page is not None and key != page:
+                continue
+            facts = sorted(self._facts[key].values(), key=lambda f: (
+                order.index(f.slot) if f.slot in order else len(order), f.slot))
+            out += [f.model_copy(deep=True) for f in facts
+                    if status is None or f.status == status]
+        return out
+
+    def fact(self, page: str, slot: str) -> Fact | None:
+        """A copy of one fact, or None."""
+        fact = self._facts.get(page, {}).get(slot)
+        return fact.model_copy(deep=True) if fact else None
+
+    def _owner_fact(self, page: str, slot: str) -> Fact:
+        fact = self._facts.get(page, {}).get(slot)
+        if fact is None:
+            raise KeyError(f"{page}:{slot}")
+        return fact
+
+    def confirm_fact(self, page: str, slot: str) -> None:
+        """The owner vouches for a fact as written."""
+        fact = self._owner_fact(page, slot)
+        fact.status, fact.updated = ClaimStatus.CONFIRMED, _now()
+
+    def reject_fact(self, page: str, slot: str) -> None:
+        """The owner says a fact is wrong: its property goes, its value is remembered."""
+        fact = self._owner_fact(page, slot)
+        if (p := self._pages.get(page)) is not None:
+            p.remove_property(slot)
+        self._record_fact_rejection(fact, _now())
+        del self._facts[page][slot]
+        if not self._facts[page]:
+            del self._facts[page]
+
+    def subject_names(self, key: str) -> list[str]:
+        """The names a page's subject goes by: title and aliases."""
+        page = self._pages.get(key)
+        if page is None:
+            return []
+        return list(dict.fromkeys([page.title, *page.aliases]))
+
     def remap_evidence(self, mapping: dict[str, str]) -> int:
         """Rewrite evidence ids (renamed source items); returns references rewritten."""
         count = 0
         holders = [c.evidence for c in self._claims.values()]
         holders += [r.setdefault("evidence", []) for recs in self._rejected.values() for r in recs]
+        holders += [f.evidence for facts in self._facts.values() for f in facts.values()]
         for ev in holders:
             if any(e in mapping for e in ev):
                 count += sum(1 for e in ev if e in mapping)
@@ -483,9 +666,24 @@ class SelfModel:
         """Drop evidence ids that no longer exist; forget inferred claims left with none."""
         report = PruneReport()
         all_ids = {e for c in self._claims.values() for e in c.evidence}
+        all_ids |= {e for facts in self._facts.values() for f in facts.values() for e in f.evidence}
         if not all_ids:
             return report
         alive = set(existing(sorted(all_ids)))
+        for key, facts in list(self._facts.items()):
+            for slot, fact in list(facts.items()):
+                kept = [e for e in fact.evidence if e in alive]
+                if len(kept) == len(fact.evidence):
+                    continue
+                report.evidence_dropped += len(fact.evidence) - len(kept)
+                fact.evidence = kept
+                if not kept and fact.status == ClaimStatus.INFERRED:
+                    if (page := self._pages.get(key)) is not None:
+                        page.remove_property(slot)
+                    del facts[slot]
+                    log.info("self-model: forgot fact %s:%s: its evidence is gone", key, slot)
+            if not facts:
+                del self._facts[key]
         for claim in list(self._claims.values()):
             kept = [e for e in claim.evidence if e in alive]
             if len(kept) == len(claim.evidence):
@@ -578,11 +776,17 @@ class SelfModel:
         page.set_generated(generated_markdown)
 
 
-def _dump_sidecar(claims: Iterable[Claim], rejected: list[dict]) -> bytes | None:
+def _dump_sidecar(claims: Iterable[Claim], rejected: list[dict], facts: Iterable[Fact] = (),
+                  rejected_facts: list[dict] | None = None) -> bytes | None:
     body = {c.id: c.model_dump(mode="json", exclude={"id", "page"}) for c in claims}
-    if not body and not rejected:
+    fact_body = {f.slot: f.model_dump(mode="json", exclude={"page", "slot"}) for f in facts}
+    if not body and not rejected and not fact_body and not rejected_facts:
         return None
-    data = {"version": SIDECAR_VERSION, "claims": body, "rejected": rejected}
+    data: dict = {"version": SIDECAR_VERSION, "claims": body, "rejected": rejected}
+    if fact_body:
+        data["facts"] = fact_body
+    if rejected_facts:
+        data["rejected_facts"] = rejected_facts
     return (json.dumps(data, sort_keys=True, indent=1, ensure_ascii=False) + "\n").encode(*_ENC)
 
 

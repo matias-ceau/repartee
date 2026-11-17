@@ -6,6 +6,8 @@
 - ``consolidated.txt``: sorted ids of the observations already folded into the self-model.
 - ``distill-state.json``: fingerprints of the inputs of the last core and gaps runs, so an
   unchanged self-model costs no request.
+- ``rectify-state.json``: per page, a fingerprint of its confirmed key facts and the claims
+  already checked against them: ``{"people/noor": {"facts": "<hash>", "checked": [ids]}}``.
 
 These cost money to recompute, which is why they are in the home and not in the cache.
 """
@@ -136,6 +138,40 @@ class Fingerprints:
     def set(self, stage: str, value: str) -> None:
         """Record a fingerprint and write the file."""
         self.data[stage] = value
+        atomic_write(self.path, json.dumps(self.data, indent=1, sort_keys=True) + "\n")
+
+
+class RectifyState:
+    """What the rectify stage already checked, per page, kept in ``rectify-state.json``."""
+
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        self.data: dict[str, dict] = {}
+        if self.path.is_file():
+            try:
+                loaded = json.loads(self.path.read_text(encoding="utf-8"))
+                self.data = {str(k): {"facts": str(v.get("facts", "")),
+                                      "checked": [str(i) for i in v.get("checked", [])]}
+                             for k, v in dict(loaded).items() if isinstance(v, dict)}
+            except (ValueError, TypeError, AttributeError):
+                log.warning("distill: ignoring unreadable %s", self.path)
+
+    def facts(self, page: str) -> str | None:
+        """The fingerprint of the page's confirmed facts at its last check."""
+        entry = self.data.get(page)
+        return entry["facts"] if entry else None
+
+    def checked(self, page: str) -> set[str]:
+        """Claim ids already checked against the page's facts as they were then."""
+        entry = self.data.get(page)
+        return set(entry["checked"]) if entry else set()
+
+    def set(self, page: str, facts: str, checked: Iterable[str]) -> None:
+        """Record a page's check (call save() to write)."""
+        self.data[page] = {"facts": facts, "checked": sorted(set(checked))}
+
+    def save(self) -> None:
+        """Write the file."""
         atomic_write(self.path, json.dumps(self.data, indent=1, sort_keys=True) + "\n")
 
 

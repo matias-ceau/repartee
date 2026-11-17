@@ -202,8 +202,11 @@ Defined once in `repartee/schema.py` (pydantic). Summary:
 - **Claim** — one line of the self-model: `id`, `page`, `section`, `text`,
   `status` (`inferred`, `confirmed`, `rejected`), `origin` (`pipeline`, `user`,
   `interview`), `confidence`, `evidence` (item ids), `valid_from`, `valid_to`.
+- **Fact** — a key fact of a page: a frontmatter property from a small registry
+  (`ntype`, `relation`, `species`, `born`, `died`; lists `children`, `parents`,
+  `owners`) or one the owner added, with a status, origin and evidence like a claim.
 - **ClaimOp** — the only way the pipeline changes the self-model: `add`,
-  `support`, `revise`, `supersede`, `question`, `create_page`.
+  `support`, `revise`, `supersede`, `question`, `create_page`, `set_fact`, `retract`.
 
 **Ids are stable.** An item id is a short prefix plus a hash of its natural
 key, never a row number.
@@ -355,12 +358,17 @@ their metadata:
 | Deleted a claim line | Recorded as `rejected` with its text and evidence, so it is not inferred again. |
 | Moved a claim line to another page | Follows the id; nothing else changes. |
 | Wrote anything outside claim lines | Preserved untouched. |
+| Edited or added a frontmatter property (key fact) | Fact becomes `confirmed`, origin `user`. |
+| Deleted a property the pipeline set | Recorded as rejected; that value is not set again. |
 
 The `review` mode does the same through the TUI: confirm, edit or reject, one
 claim at a time, lowest confidence first.
 
 Evidence is not shown in the markdown. `repartee why <claim-id>` and the review
-mode print a claim with excerpts of the material behind it.
+mode print a claim with excerpts of the material behind it; `repartee why PAGE:SLOT`
+does the same for a key fact, and `repartee facts` lists inferred facts to confirm
+or reject. Fact status lives in the sidecar (`"facts"`, `"rejected_facts"`), so the
+frontmatter stays as clean as in the owner's vault.
 
 ### 10.4 What the pipeline may do
 
@@ -374,6 +382,13 @@ Only through `ClaimOp`s, applied and validated by code:
 - `question`: append to `open-questions.md` (used when new evidence
   contradicts a `confirmed` claim, or when something is unclear).
 - `create_page`.
+- `set_fact` on a page: `confirmed` (origin `interview`) when its evidence includes
+  the owner's own interview or mirror-session turn, `inferred` otherwise. Never
+  changes a `confirmed` fact: a different value becomes a question.
+- `retract` an `inferred` claim that is false: its line goes, its text is kept as
+  rejected (marked `retracted`) so it is not added again. Only when backed by a
+  `confirmed` fact about the claim's subject, or by the owner's own interview or
+  mirror-session turn. On a `confirmed` claim it becomes a question.
 
 Rejected by validation: touching `confirmed` or `rejected` claims, unknown
 evidence ids, re-adding text that matches a rejected claim, writing outside
@@ -403,8 +418,14 @@ Runs in stages; each is incremental and restartable.
 3. **Consolidate** (tier `smart`). Per page: the current claims plus the new
    observations go in; a list of `ClaimOp`s comes out as structured output and
    is applied. Large pages are processed in batches.
-4. **Core.** Regenerate the generated block of `core.md`.
-5. **Gaps.** Look for thin, stale or contradictory areas and for kinds of
+4. **Rectify** (tier `smart`). For each subject whose confirmed key facts changed
+   (or that has claims not yet checked), its inferred claims and the inferred
+   claims elsewhere naming it go to the model in one request; each comes back as
+   keep, revise (right event, wrong detail) or retract, applied as `ClaimOp`s.
+5. **Core.** Regenerate the generated block of `core.md`. What the owner stated
+   (confirmed facts and claims, interview claims) is a separate first block the
+   summary must reflect; inferred claims follow.
+6. **Gaps.** Look for thin, stale or contradictory areas and for kinds of
    knowledge with little coverage; write questions to `open-questions.md`.
 
 Confidence starts from the kind of source (an interview answer or a journal

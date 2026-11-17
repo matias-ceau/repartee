@@ -12,7 +12,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from repartee.mirror.context import claim_status, clip, fmt_when, indent
-from repartee.schema import Claim, ClaimStatus
+from repartee.schema import Claim, ClaimOrigin, ClaimStatus, Fact
 from repartee.selfmodel import SelfModel
 from repartee.store import Corpus
 
@@ -50,6 +50,61 @@ def explain_claim(model: SelfModel, corpus: Corpus, claim_id: str) -> ReviewCard
     ]
     return ReviewCard(claim=claim, page_title=page.title if page else claim.page,
                       evidence=evidence)
+
+
+class FactCard(BaseModel):
+    """One key fact with its page title and evidence."""
+
+    fact: Fact
+    page_title: str
+    evidence: list[Excerpt]
+
+
+def parse_fact_ref(ref: str) -> tuple[str, str] | None:
+    """("people/noor", "relation") from "people/noor:relation" (".md" allowed); else None."""
+    page, sep, slot = ref.strip().rpartition(":")
+    page = page.strip().removesuffix(".md")
+    if not sep or not page or not slot.strip():
+        return None
+    return page, slot.strip()
+
+
+def explain_fact(model: SelfModel, corpus: Corpus, page: str, slot: str) -> FactCard | None:
+    """A fact with excerpts of the material behind it; None when there is no such fact."""
+    fact = model.fact(page, slot)
+    if fact is None:
+        return None
+    p = model.page(page)
+    evidence = [
+        Excerpt(item_id=item.id, when=item.timestamp, container=item.container,
+                author=item.author, text=clip(item.text, EXCERPT_CHARS, flat=False))
+        for item in corpus.get_items(fact.evidence)
+    ]
+    return FactCard(fact=fact, page_title=p.title if p else page, evidence=evidence)
+
+
+def fact_status(fact: Fact) -> str:
+    """'confirmed, written by the owner', 'confirmed, from an interview', 'inferred 0.60'."""
+    if fact.status == ClaimStatus.CONFIRMED:
+        return "confirmed" + {ClaimOrigin.USER: ", written by the owner",
+                              ClaimOrigin.INTERVIEW: ", from an interview"}.get(fact.origin, "")
+    return f"{fact.status} {fact.confidence:.2f}"
+
+
+def render_fact_card(card: FactCard) -> str:
+    """Plain text for a terminal: the fact, its status and its evidence."""
+    fact = card.fact
+    lines = [f"{card.page_title} › {fact.slot}  [{fact.page}:{fact.slot} · {fact_status(fact)}]",
+             f"  {fact.shown()}"]
+    if card.evidence:
+        lines.append("Evidence:")
+        for ex in card.evidence:
+            lines.append(f"  {fmt_when(ex.when)} · {ex.container} · {ex.author}")
+            lines.append(indent(ex.text, "    "))
+    else:
+        lines.append(f"Evidence: {len(fact.evidence)} item(s) no longer in the index."
+                     if fact.evidence else "Evidence: none (written by the owner).")
+    return "\n".join(lines)
 
 
 def render_card(card: ReviewCard) -> str:

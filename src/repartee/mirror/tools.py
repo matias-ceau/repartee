@@ -382,6 +382,10 @@ class Toolbox:
         aliases = f" (also: {', '.join(page.aliases)})" if page.aliases else ""
         header = (f"Page {key}{aliases}. Claim lines end with [id · status]; other text is "
                   "the owner's own. Empty sections are left out.")
+        facts = self.model.facts(page=key)
+        if facts:
+            header += "\nKey facts: " + "; ".join(
+                f"{f.slot}: {f.shown()} ({f.status})" for f in facts)
         body = "\n".join(_drop_empty_sections(lines)).strip()
         return ToolOutcome(content=_bound([header, body], MAX_READ_CHARS), refs=[key],
                            summary=f"page {key}")

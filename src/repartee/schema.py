@@ -285,10 +285,98 @@ class CreatePage(BaseModel):
     aliases: list[str] = Field(default_factory=list)
 
 
+class SetFact(BaseModel):
+    """Set a key fact (a frontmatter property from FACT_SLOTS) on a page.
+
+    A multi-valued slot gains the value; a single-valued one takes it. Never changes a
+    confirmed fact: a different value becomes a question to the owner instead. The fact is
+    confirmed when the evidence includes the owner's own interview or mirror-session turn.
+    """
+
+    op: Literal["set_fact"] = "set_fact"
+    page: str
+    slot: str
+    value: str
+    evidence: list[str]
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class RetractClaim(BaseModel):
+    """An inferred claim is false (not outdated): remove it and remember its text.
+
+    Allowed only when backed by a confirmed fact (``fact_page``, ``fact_slot``; the claim
+    must be on that page or name its subject) or by evidence that includes the owner's own
+    interview or mirror-session turn. On a confirmed claim it becomes a question instead.
+    """
+
+    op: Literal["retract"] = "retract"
+    claim_id: str
+    reason: str
+    evidence: list[str] = Field(default_factory=list)
+    fact_page: str | None = None
+    fact_slot: str | None = None
+
+
 ClaimOp = Annotated[
-    AddClaim | SupportClaim | ReviseClaim | SupersedeClaim | AskQuestion | CreatePage,
+    AddClaim | SupportClaim | ReviseClaim | SupersedeClaim | AskQuestion | CreatePage
+    | SetFact | RetractClaim,
     Field(discriminator="op"),
 ]
+
+
+# Key facts: typed frontmatter properties on pages, in the style of an Obsidian vault
+# (``ntype: person``, ``relation: sister``, ``children: ["[[Theo]]"]``). Their status and
+# evidence live in the page's sidecar, never in the frontmatter.
+
+
+class FactSlot(BaseModel):
+    """A property the pipeline may set: its cardinality and what it means."""
+
+    multi: bool = False  # a list of values (children) rather than one (relation)
+    link: bool = False  # values name people or pages: written as [[wikilinks]] when known
+    about: str
+
+
+#: The properties the pipeline knows. The owner may add any other; those are kept
+#: verbatim and shown to the model as facts, but the pipeline never sets them.
+FACT_SLOTS: dict[str, FactSlot] = {
+    "ntype": FactSlot(about="what the subject is: person, pet, place, organisation, topic"),
+    "relation": FactSlot(about="who they are to me: sister, mother, partner, ex-partner, "
+                               "friend, colleague, my cat..."),
+    "species": FactSlot(about="for an animal: cat, dog, horse..."),
+    "born": FactSlot(about="date of birth: YYYY-MM-DD, YYYY-MM or YYYY"),
+    "died": FactSlot(about="date of death: YYYY-MM-DD, YYYY-MM or YYYY"),
+    "children": FactSlot(multi=True, link=True, about="their children, one name each"),
+    "parents": FactSlot(multi=True, link=True, about="their parents, one name each"),
+    "owners": FactSlot(multi=True, link=True, about="for a pet: whose it is, one name each"),
+}
+
+#: Frontmatter keys that describe the page itself, not its subject: never facts.
+PAGE_PROPERTIES = frozenset({"kind", "title", "aliases", "updated", "cssclasses"})
+
+FactValue = str | list[str]
+
+
+class Fact(BaseModel):
+    """One key fact of a page: a frontmatter property with a status, like a claim."""
+
+    page: str
+    slot: str
+    value: FactValue
+    status: ClaimStatus = ClaimStatus.INFERRED
+    origin: ClaimOrigin = ClaimOrigin.PIPELINE
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    evidence: list[str] = Field(default_factory=list)  # item ids
+    created: datetime | None = None
+    updated: datetime | None = None
+
+    def values(self) -> list[str]:
+        """The value as a list (one element for a single-valued fact)."""
+        return list(self.value) if isinstance(self.value, list) else [self.value]
+
+    def shown(self) -> str:
+        """The value for a prompt or a terminal: 'sister', 'Theo, Bo'."""
+        return ", ".join(self.values())
 
 
 class OpResult(BaseModel):

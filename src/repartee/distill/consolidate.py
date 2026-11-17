@@ -27,7 +27,9 @@ from repartee.schema import (
     Kind,
     Observation,
     OpResult,
+    RetractClaim,
     ReviseClaim,
+    SetFact,
     SupersedeClaim,
     SupportClaim,
 )
@@ -48,10 +50,14 @@ _SOURCE_LABEL: dict[str, str] = {
 class PlannedOp(BaseModel):
     """One change to the page, citing the observations (o1, o2...) it rests on."""
 
-    op: Literal["add", "support", "revise", "supersede", "question"]
+    op: Literal["add", "support", "revise", "supersede", "question", "set_fact", "retract"]
     claim_id: str | None = None
     section: str | None = None
-    text: str | None = None
+    text: str | None = Field(default=None, description="The claim or question; for retract, "
+                             "why the claim is false.")
+    slot: str | None = Field(default=None, description="set_fact: the key fact. retract: the "
+                             "confirmed key fact that contradicts the claim, if that is why.")
+    value: str | None = Field(default=None, description="set_fact: the fact's value.")
     observations: list[str] = Field(default_factory=list, description="Refs such as o1.")
     valid_from: str | None = None
     valid_to: str | None = None
@@ -71,6 +77,8 @@ class BatchOutcome:
     refused: int = 0
     questions: int = 0
     claim_ids: list[str] = field(default_factory=list)
+    retracted: list[str] = field(default_factory=list)
+    facts: int = 0  # facts set or supported
     refusals: list[str] = field(default_factory=list)  # "op: reason", for the log
 
 
@@ -94,7 +102,14 @@ def build_request(model: SelfModel, key: str, batch: Sequence[Observation], owne
     sections = [s for s in PIPELINE_SECTIONS.get(page.kind, []) if s != EARLIER]
     aliases = f", also known as {', '.join(page.aliases)}" if page.aliases else ""
     lines = [f"Page: {key} (a {page.kind} page) \"{page.title}\"{aliases}",
-             f"Sections you may add to: {', '.join(sections)}", "", "Current claims:"]
+             f"Sections you may add to: {', '.join(sections)}", "", "Key facts:"]
+    facts = model.facts(page=key)
+    for fact in facts:
+        status = "confirmed by me" if fact.status == ClaimStatus.CONFIRMED else "inferred"
+        lines.append(f"- {fact.slot}: {fact.shown()} ({status})")
+    if not facts:
+        lines.append("(none yet)")
+    lines += ["", "Current claims:"]
     claims = model.claims(page=key)
     for claim in claims:
         status = "confirmed by me" if claim.status == ClaimStatus.CONFIRMED else "inferred"
@@ -163,13 +178,32 @@ def to_claim_ops(planned: Sequence[PlannedOp], batch_refs: dict[str, Observation
                 valid_from=valid_from, valid_to=valid_date(p.valid_to)))
         elif p.op == "question" and text:
             ops.append(AskQuestion(text=text, page=key))
+        elif p.op == "set_fact" and (p.slot or "").strip() and (p.value or "").strip() \
+                and evidence:
+            ops.append(SetFact(page=key, slot=p.slot.strip(), value=p.value.strip(),
+                               evidence=evidence, confidence=confidence))
+        elif p.op == "retract" and claim_id and (evidence or (p.slot or "").strip()):
+            slot = (p.slot or "").strip() or None
+            ops.append(RetractClaim(claim_id=claim_id, reason=text or "it is contradicted",
+                                    evidence=evidence, fact_page=key if slot else None,
+                                    fact_slot=slot))
         else:
             bad += 1
     return ops, bad
 
 
+def owner_statements(get_items: Callable[[Iterable[str]], list]) -> Callable[
+        [Iterable[str]], set[str]]:
+    """Picks, from item ids, the owner's own turns in interviews and mirror sessions."""
+    def pick(ids: Iterable[str]) -> set[str]:
+        return {item.id for item in get_items(ids)
+                if item.is_self and item.kind in (Kind.INTERVIEW, Kind.MIRROR)}
+    return pick
+
+
 def apply_batch(model: SelfModel, ops: Sequence[object],
-                existing: Callable[[Iterable[str]], set[str]] | None) -> BatchOutcome:
+                existing: Callable[[Iterable[str]], set[str]] | None,
+                statements: Callable[[Iterable[str]], set[str]] | None = None) -> BatchOutcome:
     """Apply ops; a duplicate add becomes support for the claim it duplicates."""
     outcome = BatchOutcome()
 
@@ -178,17 +212,24 @@ def apply_batch(model: SelfModel, ops: Sequence[object],
             outcome.applied += 1
             if result.op == "question":
                 outcome.questions += 1
+            elif result.op == "set_fact":
+                outcome.facts += 1
+            elif result.op == "retract" and result.claim_id:
+                outcome.retracted.append(result.claim_id)
             elif result.claim_id and result.claim_id.startswith("c-"):
                 outcome.claim_ids.append(result.claim_id)
         else:
             outcome.refused += 1
             outcome.refusals.append(f"{result.op}: {result.reason}")
+            if result.claim_id and result.claim_id.startswith("q-"):
+                outcome.questions += 1  # a confirmed fact or claim: asked instead
 
-    for op, result in zip(ops, model.apply(ops, existing_evidence=existing), strict=True):
+    results = model.apply(ops, existing_evidence=existing, owner_statements=statements)
+    for op, result in zip(ops, results, strict=True):
         if (not result.ok and result.reason == DUPLICATE and result.claim_id
                 and result.claim_id.startswith("c-") and getattr(op, "evidence", None)):
             (result,) = model.apply(
                 [SupportClaim(claim_id=result.claim_id, evidence=list(op.evidence))],
-                existing_evidence=existing)
+                existing_evidence=existing, owner_statements=statements)
         count(result)
     return outcome

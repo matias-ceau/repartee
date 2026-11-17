@@ -1,4 +1,4 @@
-"""The distill pipeline: extract, route, consolidate, core, gaps (spec section 11).
+"""The distill pipeline: extract, route, consolidate, rectify, core, gaps (spec section 11).
 
 Every stage is incremental and restartable:
 
@@ -6,6 +6,8 @@ Every stage is incremental and restartable:
   (``derived/observations/``), and writes each window of results as soon as it arrives;
 - consolidate skips observations already folded in (``derived/consolidated.txt``), saving
   the self-model and the consumed ids after each batch;
+- rectify checks a subject only when its confirmed key facts changed or it has claims
+  not checked yet (``derived/rectify-state.json``);
 - core and gaps run only when their input changed (``derived/distill-state.json``).
 
 A failed request is recorded in ``DistillReport.errors`` and retried by the next run; it
@@ -26,6 +28,7 @@ from repartee.config import HomeConfig, estimate_tokens
 from repartee.distill import consolidate as cons
 from repartee.distill import core as core_stage
 from repartee.distill import gaps as gaps_stage
+from repartee.distill import rectify as rectify_stage
 from repartee.distill.cost import Spend
 from repartee.distill.extract import (
     ExtractionResult,
@@ -38,6 +41,7 @@ from repartee.distill.prompts import (
     EXTRACT_SYSTEM,
     EXTRACT_VERSION,
     GAPS_SYSTEM,
+    RECTIFY_SYSTEM,
 )
 from repartee.distill.route import norm_label, route
 from repartee.distill.state import (
@@ -45,6 +49,7 @@ from repartee.distill.state import (
     ExtractionRecord,
     Fingerprints,
     ObservationLog,
+    RectifyState,
     now_iso,
 )
 from repartee.home import Home
@@ -56,7 +61,7 @@ from repartee.store.corpus import Corpus
 
 log = logging.getLogger(__name__)
 
-STAGES = ("extract", "route", "consolidate", "core", "gaps")
+STAGES = ("extract", "route", "consolidate", "rectify", "core", "gaps")
 
 #: Tokens added per item id and per request around the chunk text (headers, ids).
 ID_OVERHEAD_TOKENS = 8
@@ -67,6 +72,7 @@ CONSOLIDATE_SHARE = 0.30
 OBSERVATION_TOKENS = 30  # an observation line in a consolidate request, on average
 CORE_OUTPUT_TOKENS = 1800
 GAPS_OUTPUT_TOKENS = 600
+RECTIFY_OUTPUT_TOKENS = 300
 BATCH_WINDOW = 1000  # extract requests per batch submission
 
 
@@ -102,7 +108,9 @@ class DistillReport(BaseModel):
     ops_applied: int = 0
     ops_refused: int = 0
     questions_added: int = 0
+    facts_set: int = 0  # key facts set or supported
     claim_ids: list[str] = []  # claims added or changed in this run
+    retracted: list[str] = []  # inferred claims withdrawn as false (owner-backed)
     requests: int = 0  # answered requests (failed ones are in errors)
     input_tokens: int = 0
     output_tokens: int = 0
@@ -131,6 +139,8 @@ class Distiller:
         self.observations = ObservationLog(derived / "observations")
         self.consumed = ConsumedSet(derived / "consolidated.txt")
         self.fingerprints = Fingerprints(derived / "distill-state.json")
+        self.rectify_state = RectifyState(derived / "rectify-state.json")
+        self.statements = cons.owner_statements(corpus.get_items)
 
     # ------------------------------------------------------------------ selection
 
@@ -198,11 +208,20 @@ class Distiller:
                           cost_usd=estimate_cost(models.smart, cons_in, cons_out)),
         ]
         changes = bool(pending or waiting)
+        jobs = [j for j in rectify_stage.plan_jobs(self.model, self.rectify_state) if j.claims]
+        if jobs:
+            r_in = sum(estimate_tokens(RECTIFY_SYSTEM) + REQUEST_OVERHEAD_TOKENS
+                       + sum(estimate_tokens(c.text) + 12 for c in j.claims) for j in jobs)
+            r_out = RECTIFY_OUTPUT_TOKENS * len(jobs)
+            stages.append(StageEstimate(
+                stage="rectify", requests=len(jobs), input_tokens=r_in, output_tokens=r_out,
+                cost_usd=estimate_cost(models.smart, r_in, r_out)))
         # new claims from this run feed core and gaps: count them in, up to the core cap
         expected = min(cons_out, core_stage.MAX_CLAIMS * 25) if changes else 0
         claims = core_stage.select_claims(self.model)
-        if (claims or changes) and (changes or core_stage.fingerprint(claims)
-                                    != self.fingerprints.get("core")):
+        facts = core_stage.select_facts(self.model)
+        if (claims or facts or changes) and (changes or core_stage.fingerprint(claims, facts)
+                                             != self.fingerprints.get("core")):
             c_in = estimate_tokens(CORE_SYSTEM) + min(
                 sum(estimate_tokens(c.text) + 12 for c in claims) + expected,
                 core_stage.MAX_CLAIMS * 40)
@@ -247,13 +266,16 @@ class Distiller:
             if "route" in stages or "consolidate" in stages:
                 await self._guarded(report, "consolidate", self._route_and_consolidate(
                     report, spend, tell, consolidate="consolidate" in stages))
+            if "rectify" in stages:
+                await self._guarded(report, "rectify", self._rectify(report, spend, tell))
             if "core" in stages:
                 await self._guarded(report, "core", self._core(report, spend, tell))
             if "gaps" in stages:
                 await self._guarded(report, "gaps", self._gaps(report, spend, tell))
         except _Abort as stop:
             report.errors.append(str(stop))
-        report.claim_ids = list(dict.fromkeys(report.claim_ids))
+        report.claim_ids = [c for c in dict.fromkeys(report.claim_ids)
+                            if c not in set(report.retracted)]
         report.requests = spend.requests
         report.input_tokens = spend.input_tokens
         report.output_tokens = spend.output_tokens
@@ -394,29 +416,71 @@ class Distiller:
                     continue
                 ops, malformed = cons.to_claim_ops(result.ops, cons.refs(batch), key,
                                                    item_kinds)
-                outcome = cons.apply_batch(self.model, ops, self.corpus.existing_item_ids)
-                report.ops_applied += outcome.applied
-                report.ops_refused += outcome.refused + malformed
-                report.questions_added += outcome.questions
-                report.claim_ids.extend(outcome.claim_ids)
+                outcome = cons.apply_batch(self.model, ops, self.corpus.existing_item_ids,
+                                           self.statements)
+                self._count(report, outcome)
+                report.ops_refused += malformed
                 if outcome.refusals:
                     log.info("distill: %s refused %s", key, "; ".join(outcome.refusals))
                 self._save()
                 self.consumed.add(o.id for o in batch)
                 tell("consolidate", done, total)
 
+    @staticmethod
+    def _count(report: DistillReport, outcome: cons.BatchOutcome) -> None:
+        report.ops_applied += outcome.applied
+        report.ops_refused += outcome.refused
+        report.questions_added += outcome.questions
+        report.facts_set += outcome.facts
+        report.claim_ids.extend(outcome.claim_ids)
+        report.retracted.extend(outcome.retracted)
+
+    # -------------------------------------------------------------------- rectify
+
+    async def _rectify(self, report: DistillReport, spend: Spend, tell: Progress) -> None:
+        jobs = rectify_stage.plan_jobs(self.model, self.rectify_state)
+        if not jobs:
+            return
+        asks = [j for j in jobs if j.claims]
+        for job in jobs:
+            if not job.claims:
+                self.rectify_state.set(job.page, job.mark, job.candidates)
+        tell("rectify", 0, len(asks))
+        responses = await self._complete_many(
+            [rectify_stage.build_request(self.model, j, self.config.owner) for j in asks])
+        for done, (job, response) in enumerate(zip(asks, responses, strict=True), 1):
+            tell("rectify", done, len(asks))
+            if isinstance(response, Exception):
+                report.errors.append(f"rectify {job.page}: {response}")
+                continue
+            spend.add("smart", response)
+            result = response.parsed
+            if not isinstance(result, rectify_stage.RectifyResult):
+                report.errors.append(f"rectify {job.page}: reply was not a list of verdicts "
+                                     f"(stop reason {response.stop_reason})")
+                continue
+            outcome = cons.apply_batch(self.model, rectify_stage.to_ops(job, result),
+                                       self.corpus.existing_item_ids, self.statements)
+            self._count(report, outcome)
+            if outcome.refusals:
+                log.info("distill: rectify %s refused %s", job.page, "; ".join(outcome.refusals))
+            self._save()
+            self.rectify_state.set(job.page, job.mark, job.candidates)
+        self.rectify_state.save()
+
     # ------------------------------------------------------------------ core, gaps
 
     async def _core(self, report: DistillReport, spend: Spend, tell: Progress) -> None:
         claims = core_stage.select_claims(self.model)
-        if not claims:
+        facts = core_stage.select_facts(self.model)
+        if not claims and not facts:
             return
-        mark = core_stage.fingerprint(claims)
+        mark = core_stage.fingerprint(claims, facts)
         if mark == self.fingerprints.get("core"):
             return
         tell("core", 0, 1)
         responses = await self._complete_many(
-            [core_stage.build_request(self.model, claims, self.config.owner)])
+            [core_stage.build_request(self.model, claims, self.config.owner, facts)])
         response = responses[0]
         tell("core", 1, 1)
         if isinstance(response, Exception):

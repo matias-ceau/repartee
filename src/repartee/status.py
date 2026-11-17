@@ -126,6 +126,7 @@ class Status(BaseModel):
     embedder_error: str | None = None
     pages_by_kind: dict[str, int] = Field(default_factory=dict)
     claims_by_status: dict[str, int] = Field(default_factory=dict)
+    facts_by_status: dict[str, int] = Field(default_factory=dict)
     open_questions: list[str] = Field(default_factory=list)
     voice_registers: list[str] = Field(default_factory=list)
     chunks_pending: int = 0
@@ -147,6 +148,7 @@ def collect_status(rt: Runtime) -> Status:
     model = rt.model
     pages = Counter(str(page.kind) for page in model.pages())
     claims = Counter(str(claim.status) for claim in model.claims())
+    facts = Counter(str(fact.status) for fact in model.facts())
     # Planning makes no request, so it works without a client.
     plan = Distiller(rt.home, rt.config, rt.corpus, model, rt.llm).plan()  # type: ignore[arg-type]
     embedder_error = stats["embedder_error"] or "; ".join(rt.embedder_notes) or None
@@ -172,6 +174,7 @@ def collect_status(rt: Runtime) -> Status:
         embedder_error=embedder_error,
         pages_by_kind=dict(sorted(pages.items())),
         claims_by_status=dict(sorted(claims.items())),
+        facts_by_status=dict(sorted(facts.items())),
         open_questions=[q.text for q in model.questions()],
         voice_registers=model.voice_registers(),
         chunks_pending=plan.chunks_pending,
@@ -267,6 +270,12 @@ def render_status(status: Status) -> str:
     if unconfirmed:
         lines.append(_row("", f"{counted(unconfirmed, 'claim')} to review: "
                               "run `repartee review`"))
+    facts = sum(status.facts_by_status.values())
+    if facts:
+        lines.append(_row("", f"{counted(facts, 'key fact')}: {_counts(status.facts_by_status)}"))
+    if status.facts_by_status.get("inferred", 0):
+        lines.append(_row("", f"{counted(status.facts_by_status['inferred'], 'key fact')} "
+                              "to review: run `repartee facts`"))
     if status.hand_edits:
         lines.append(_row("", f"your edits picked up: {_counts(status.hand_edits)}"))
     questions = status.open_questions

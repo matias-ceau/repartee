@@ -214,4 +214,4 @@ async def test_run_filters_and_progress(env):
     assert seen == [("extract", 0, 1), ("extract", 1, 1)]
     with pytest.raises(ValueError):
         await env.distiller().run(stages=["extract", "polish"])
-    assert STAGES == ("extract", "route", "consolidate", "core", "gaps")
+    assert STAGES == ("extract", "route", "consolidate", "rectify", "core", "gaps")

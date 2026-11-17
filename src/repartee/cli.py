@@ -303,6 +303,11 @@ def _report_lines(report: DistillReport) -> list[str]:
         f"{counted(len(report.claim_ids), 'claim')} added or changed "
         f"({counted(report.ops_applied, 'change')} applied, {report.ops_refused:,} refused), "
         f"{counted(report.questions_added, 'question')} added.",
+        *([f"{counted(report.facts_set, 'key fact')} set or supported."]
+          if report.facts_set else []),
+        *([f"{counted(len(report.retracted), 'inferred claim')} retracted as false: "
+           f"{', '.join(report.retracted[:5])}{' ...' if len(report.retracted) > 5 else ''}."]
+          if report.retracted else []),
         f"Spent about {_usd(report.cost_usd)} on {counted(report.requests, 'request')} "
         f"({report.input_tokens:,} tokens in, {report.output_tokens:,} out).",
     ]
@@ -438,16 +443,72 @@ def status(ctx: click.Context) -> None:
 @click.argument("claim_id")
 @click.pass_context
 def why(ctx: click.Context, claim_id: str) -> None:
-    """A claim with the material behind it."""
-    from repartee.mirror.review import explain_claim, render_card
+    """A claim (or a key fact, PAGE:SLOT) with the material behind it."""
+    from repartee.mirror.review import (
+        explain_claim,
+        explain_fact,
+        parse_fact_ref,
+        render_card,
+        render_fact_card,
+    )
 
     rt = _open(ctx, None)
     wanted = claim_id.strip().lstrip("^")
+    ref = parse_fact_ref(wanted) if ":" in wanted else None
+    if ref is not None:
+        fact_card = explain_fact(rt.model, rt.corpus, *ref)
+        if fact_card is None:
+            click.echo(f"repartee: no key fact {wanted} in the self-model.", err=True)
+            ctx.exit(1)
+        click.echo(render_fact_card(fact_card))
+        return
     card = explain_claim(rt.model, rt.corpus, wanted)
     if card is None:
         click.echo(f"repartee: no claim {wanted} in the self-model.", err=True)
         ctx.exit(1)
     click.echo(render_card(card))
+
+
+@main.command()
+@click.option("--all", "show_all", is_flag=True, help="List confirmed facts too.")
+@click.option("--confirm", "confirm", multiple=True, metavar="PAGE:SLOT",
+              help="Confirm an inferred fact as it is (repeatable).")
+@click.option("--reject", "reject", multiple=True, metavar="PAGE:SLOT",
+              help="Reject a fact: its property goes and is not inferred again (repeatable).")
+@click.pass_context
+def facts(ctx: click.Context, show_all: bool, confirm: tuple[str, ...],
+          reject: tuple[str, ...]) -> None:
+    """Key facts (page properties): inferred ones to confirm or reject."""
+    from repartee.mirror.review import fact_status, parse_fact_ref
+    from repartee.schema import ClaimStatus
+
+    rt = _open(ctx, None)
+    changes = [(r, rt.model.confirm_fact) for r in confirm] + [
+        (r, rt.model.reject_fact) for r in reject]
+    for ref, act in changes:
+        parsed = parse_fact_ref(ref)
+        try:
+            if parsed is None:
+                raise KeyError(ref)
+            act(*parsed)
+        except KeyError:
+            click.echo(f"repartee: no key fact {ref} in the self-model.", err=True)
+            ctx.exit(1)
+    if changes:
+        rt.model.save()
+        _commit(rt, "facts reviewed")
+        click.echo(f"Saved {len(changes)} change(s).")
+        return
+    shown = rt.model.facts(status=None if show_all else ClaimStatus.INFERRED)
+    if not shown:
+        click.echo("No key facts." if show_all else "No inferred key facts to review.")
+        return
+    for fact in shown:
+        click.echo(f"{fact.page}:{fact.slot} = {fact.shown()}  [{fact_status(fact)}]")
+    if not show_all:
+        click.echo("Confirm with --confirm PAGE:SLOT, reject with --reject PAGE:SLOT; "
+                   "`repartee why PAGE:SLOT` shows the evidence. Editing the property in "
+                   "the page confirms it, deleting it rejects it.")
 
 
 # ------------------------------------------------------------------- ask, draft

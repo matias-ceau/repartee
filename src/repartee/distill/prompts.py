@@ -8,7 +8,13 @@ existing observations count as stale: every chunk is then extracted again.
 
 from __future__ import annotations
 
+from repartee.schema import FACT_SLOTS
+
+#: Not bumped for the key-facts wording below: observations extracted before it stay valid.
 EXTRACT_VERSION = "extract-2"
+
+_SLOTS = "\n".join(f"  {name}{' (a list)' if slot.multi else ''}: {slot.about}"
+                    for name, slot in FACT_SLOTS.items())
 
 _MIRROR_BRIEF = """\
 You are helping build a "mirror" of one person, {owner}: a private, readable model of their \
@@ -35,6 +41,12 @@ along, what they share, how they talk to each other.
 - Behaviour patterns: how {owner} tends to react, decide, cope, argue, apologise, plan \
 ("when X happens, I tend to Y"). Only when the chunk actually shows it.
 - Health: symptoms, conditions, treatments, sleep, energy, as {owner} reports them.
+- Key facts about a person or an animal, each in its own plain observation, when the chunk \
+states them (not when it only hints at them): who they are to {owner} ("Noor is my \
+sister."), an animal's species ("Pippa is my cat."), birth and death dates, children, \
+parents. A pet is a person observation under its name. Do not guess a relation from tone: \
+affection between two people says nothing about whether they are partners, siblings or \
+friends.
 Skip small talk and logistics that say nothing lasting ("ok see you at 8"), and things about \
 other people that do not touch {owner}'s life.
 
@@ -130,6 +142,18 @@ replaced it (text, observations, valid_from) and, if known, when the old one end
 2023"), not to fix wording.
 - question: something to ask {owner} (text), when an observation contradicts a confirmed \
 claim, or when observations conflict and you cannot tell which is right.
+- set_fact: a key fact about the page's subject (slot, value, observations). Key facts are \
+the page's properties; these are the only slots:
+""" + _SLOTS + """
+  Set one only when an observation states it plainly; one value per operation (call it \
+again for a second child). Never change a key fact marked "confirmed by me": ask a question \
+instead. Write names as names; dates as YYYY-MM-DD, YYYY-MM or YYYY.
+- retract: an inferred claim (claim_id) that is false, not merely outdated, with why (text). \
+Allowed only when a key fact confirmed by {owner} contradicts it (give that slot) or when \
+an observation from {owner}'s own interview or mirror-session answer does (cite it). \
+Anything else that contradicts a claim is a question, or a supersede when things changed. \
+Never retract a confirmed claim. When an inferred claim has the right event but a wrong \
+detail ("my dog Pippa" when {owner} says Pippa is a cat), revise it instead.
 
 Writing claims
 - First person, one line, one fact, standalone, as short as it can be while staying \
@@ -154,12 +178,39 @@ where I live and what I do, the people who matter most and who they are to me, w
 about and think, how I tend to behave, my tastes, anything about my health that shapes daily \
 life, and the main turns of my life so far.
 
-You get the strongest claims of the self-model, grouped by page. Use only them: no facts \
-from elsewhere, no embellishment, no guesses. Prefer confirmed claims, recent over old, \
-and what shapes everyday life over trivia. Write plain markdown: a few short paragraphs or \
+You get two blocks. First, what I have stated myself: key facts and claims I wrote, \
+confirmed or said in an interview. Everything in it must be reflected in the text (name \
+people with who they are to me, e.g. "my sister Noor"; say what I do for a living when I \
+said it), and it wins over anything inferred that disagrees. Second, the strongest claims \
+the pipeline inferred from my material, grouped by page, less certain. Use only these two \
+blocks: no facts from elsewhere, no embellishment, no guesses. Prefer recent over old, and \
+what shapes everyday life over trivia. Write plain markdown: a few short paragraphs or \
 "### " sub-headings with tight bullet lists, at most about 1,200 words (less is better when \
 there is less to say). Write in the language most of the claims are in. Do not add a top \
 heading, front matter, claim ids or comments; the text goes inside an existing section.\
+"""
+
+RECTIFY_SYSTEM = _MIRROR_BRIEF + """
+
+The self-model is a set of markdown pages. Each page holds claims (single lines in the first \
+person) and key facts (properties such as relation, species, born). "Confirmed" facts are \
+what {owner} stated: in the page, in an interview or in a session with the mirror. They are \
+right. "Inferred" claims were written by a model from {owner}'s chats and notes, and can be \
+wrong: "Noor is my partner" when {owner} says Noor is a sister, "my dog Pippa" when Pippa is \
+a cat.
+
+Your part: you get one subject (a person, a pet, ...), its confirmed key facts, and inferred \
+claims that are on its page or mention it. For each claim, decide whether it contradicts a \
+confirmed fact:
+- keep: it does not contradict any confirmed fact (most claims). When unsure, keep.
+- revise: the event or idea is right but a detail contradicts a fact; give the corrected \
+claim (text), changing only that detail and keeping the rest, in the claim's language.
+- retract: the claim as a whole is false given the facts (a relation that is not the one \
+{owner} stated, something that cannot be true of such a subject), with no event worth \
+keeping.
+Give the slot of the fact that decides it, and a short reason in plain words. Judge only \
+against the facts given, not against what is likely. Return a verdict only for claims to \
+revise or retract; leave out the ones to keep.\
 """
 
 GAPS_SYSTEM = _MIRROR_BRIEF + """

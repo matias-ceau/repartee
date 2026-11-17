@@ -28,7 +28,15 @@ import regex
 import yaml
 from pydantic import BaseModel
 
-from repartee.schema import PAGE_DIRS, PIPELINE_SECTIONS, PageKind, page_path
+from repartee.schema import (
+    FACT_SLOTS,
+    PAGE_DIRS,
+    PAGE_PROPERTIES,
+    PIPELINE_SECTIONS,
+    FactValue,
+    PageKind,
+    page_path,
+)
 
 GEN_START = "<!-- repartee:generated:start -->"
 GEN_END = "<!-- repartee:generated:end -->"
@@ -58,6 +66,9 @@ _QUESTION = regex.compile(
 )
 _IDLESS_TASK = regex.compile(r"^[-*][ \t]+\[[ xX]\][ \t]+\S")
 _NAME = regex.compile(r"^[\p{L}\p{N}][\p{L}\p{N}._-]*$")
+_FRONT_KEY = regex.compile(r"^(?P<key>[^\s#:'\"?\-][^:]*?)[ \t]*:(?:[ \t]|$)")
+_DATE_VALUE = regex.compile(r"^\d{4}(?:-\d{2}(?:-\d{2})?)?$")
+_WIKILINK = regex.compile(r"^\[\[([^\[\]|]+)(?:\|([^\[\]]+))?\]\]$")
 
 
 class ClaimLine(BaseModel):
@@ -111,6 +122,84 @@ def norm_text(text: str) -> str:
     folded = unicodedata.normalize("NFKC", text).casefold()
     out = regex.sub(r"[^\p{L}\p{N}]+", " ", folded).strip()
     return out or " ".join(folded.split())
+
+
+def has_facts(kind: PageKind) -> bool:
+    """True for page kinds whose frontmatter properties are key facts (subject pages)."""
+    return kind in PIPELINE_SECTIONS
+
+
+def _prop_item(raw: object) -> str | None:
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        return "true" if raw else "false"
+    if isinstance(raw, date):  # datetime is a date too
+        return raw.isoformat()
+    if isinstance(raw, str | int | float):
+        return " ".join(str(raw).split()) or None
+    if isinstance(raw, list) and len(raw) == 1 and isinstance(raw[0], str | int | float):
+        return f"[[{raw[0]}]]"  # an unquoted [[link]] reads as a nested list
+    return _yaml_value(raw)
+
+
+def property_value(raw: object, multi: bool | None = None) -> FactValue | None:
+    """A frontmatter value as a fact value: a string or a list of strings; None when empty.
+
+    ``multi`` True makes a single value a list, False makes a one-element list a single
+    value; None (an owner's own property) keeps the shape found.
+    """
+    if isinstance(raw, list):
+        one_link = len(raw) == 1 and isinstance(raw[0], list) and len(raw[0]) == 1 \
+            and isinstance(raw[0][0], str | int | float)  # `key: [[Theo]]`, unquoted
+        items = [x for x in (_prop_item(v) for v in ([raw[0]] if one_link else raw)) if x]
+        if not items:
+            return None
+        if len(items) == 1 and (multi is False or (multi is None and one_link)):
+            return items[0]
+        return items
+    item = _prop_item(raw)
+    if item is None:
+        return None
+    return [item] if multi else item
+
+
+def link_text(value: str) -> str:
+    """What a value says: the label of a [[target|label]] link, or its target, or the text."""
+    m = _WIKILINK.match(value.strip())
+    if not m:
+        return value
+    return (m.group(2) or m.group(1)).strip()
+
+
+def value_key(value: FactValue) -> tuple[str, ...]:
+    """Normal form of a fact value for comparisons: link brackets, case and order folded."""
+    items = value if isinstance(value, list) else [value]
+    return tuple(sorted({norm_text(link_text(v)) for v in items}))
+
+
+def mentions(text: str, names: Sequence[str]) -> bool:
+    """True when ``text`` names any of ``names`` as a whole word (case folded)."""
+    folded = unicodedata.normalize("NFKC", text).casefold()
+    for name in names:
+        want = " ".join(unicodedata.normalize("NFKC", name).casefold().split())
+        if len(want) < 2:
+            continue
+        pattern = rf"(?<![\p{{L}}\p{{N}}]){regex.escape(want)}(?![\p{{L}}\p{{N}}])"
+        if regex.search(pattern, folded):
+            return True
+    return False
+
+
+def _prop_scalar(value: str) -> str:
+    return value if _DATE_VALUE.match(value) else _yaml_value(value)
+
+
+def _prop_lines(name: str, value: FactValue) -> list[str]:
+    """A property in the style Obsidian writes: ``name: value`` or a block list."""
+    if isinstance(value, list):
+        return [f"{name}:"] + [f"  - {_prop_scalar(v)}" for v in value]
+    return [f"{name}: {_prop_scalar(value)}"]
 
 
 def _ws(text: str) -> str:
@@ -299,6 +388,77 @@ class Page:
         except yaml.YAMLError:
             return {}
         return data if isinstance(data, dict) else {}
+
+    def frontmatter_ok(self) -> bool:
+        """False when the page has frontmatter that is not a valid YAML mapping."""
+        bounds = self._front_bounds()
+        if bounds is None:
+            return True
+        text = "\n".join(c for c, _ in self._lines[bounds[0] + 1: bounds[1]])
+        try:
+            data = yaml.safe_load(text)
+        except yaml.YAMLError:
+            return False
+        return data is None or isinstance(data, dict)
+
+    def properties(self) -> dict[str, FactValue]:
+        """Frontmatter properties about the page's subject (key facts), values normalized.
+
+        Page metadata (kind, title, aliases, updated) is left out, and so are empty values.
+        """
+        out: dict[str, FactValue] = {}
+        for raw_name, raw in self.frontmatter().items():
+            name = str(raw_name).strip()
+            if not name or name in PAGE_PROPERTIES:
+                continue
+            slot = FACT_SLOTS.get(name)
+            value = property_value(raw, slot.multi if slot else None)
+            if value is not None:
+                out[name] = value
+        return out
+
+    def set_property(self, name: str, value: FactValue) -> None:
+        """Write one property, replacing its lines only; adds frontmatter when there is none."""
+        lines = _prop_lines(name, value)
+        span = self._property_span(name)
+        if span:
+            self._delete(*span)
+            self._insert(span[0], lines)
+            return
+        bounds = self._front_bounds()
+        if bounds:
+            self._insert(bounds[1], lines)
+        else:
+            self._insert(0, ["---", *lines, "---"])
+
+    def remove_property(self, name: str) -> None:
+        """Remove one property's lines; nothing else in the frontmatter changes."""
+        span = self._property_span(name)
+        if span:
+            self._delete(*span)
+
+    def _front_bounds(self) -> tuple[int, int] | None:
+        front = [i for i, inf in enumerate(self._info()) if inf.region == "front"]
+        return (front[0], front[-1]) if len(front) >= 2 else None
+
+    def _property_span(self, name: str) -> tuple[int, int] | None:
+        bounds = self._front_bounds()
+        if bounds is None:
+            return None
+        for i in range(bounds[0] + 1, bounds[1]):
+            m = _FRONT_KEY.match(self._lines[i][0])
+            if not m or m.group("key").strip() != name:
+                continue
+            j = i + 1
+            while j < bounds[1]:
+                line = self._lines[j][0]
+                if _FRONT_KEY.match(line) or line.startswith("#"):
+                    break
+                j += 1
+            while j > i + 1 and not self._lines[j - 1][0].strip():
+                j -= 1
+            return i, j
+        return None
 
     @property
     def title(self) -> str:

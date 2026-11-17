@@ -34,6 +34,8 @@ OTHERS_ONLY_FACTOR = 0.7
 #: Kinds where only the owner's turns may be evidence (the other speaker is the mirror,
 #: or an AI assistant in an exported conversation).
 OWNER_ONLY_KINDS = {Kind.INTERVIEW, Kind.MIRROR, Kind.ASSISTANT}
+#: Subjects about the owner alone: kept only when a line the owner wrote supports them.
+SELF_ONLY_SUBJECTS = {"health", "taste", "behaviour"}
 
 EXTRACT_MAX_TOKENS = 8000
 
@@ -174,6 +176,11 @@ def clean_observations(
             continue
         confidence = min(max(float(raw.confidence), 0.0), 1.0) * prior
         if not own.intersection(evidence):
+            if raw.subject_kind in SELF_ONLY_SUBJECTS:
+                # The owner's own health, tastes or habits, resting only on what someone
+                # else wrote: in a two-person chat that is almost always their fact, misread.
+                dropped += 1
+                continue
             confidence *= OTHERS_ONLY_FACTOR
         obs_id = "ob-" + stable_hash(chunk.id, raw.subject_kind, subject, text)
         if obs_id in kept:

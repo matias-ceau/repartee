@@ -8,7 +8,7 @@ existing observations count as stale: every chunk is then extracted again.
 
 from __future__ import annotations
 
-EXTRACT_VERSION = "extract-1"
+EXTRACT_VERSION = "extract-2"
 
 _MIRROR_BRIEF = """\
 You are helping build a "mirror" of one person, {owner}: a private, readable model of their \
@@ -77,6 +77,13 @@ automatically about their life ("help me plan a trip to Rome" is a plan, a quest
 history is not), so note only what their own words show.
 - Things other people say about {owner} can be noted as what they said ("Ana thinks I work \
 too much"), citing their line, unless {owner} confirms them.
+- Keep track of who is speaking. In a line written by someone else, "I", "my", "me" mean \
+that person, not {owner}. Their health, work, family, tastes and habits are theirs: file \
+them as a person observation under their name ("Ana has migraines", "Ana's brother is a \
+twin"), never as a health, taste or behaviour observation, and never in the first person. \
+A health, taste or behaviour observation is about {owner} and must cite a line {owner} wrote.
+- Teasing, irony and running jokes are common between close people. "I'll sell you \
+drugs on the black market" in a playful exchange is a joke, not a fact.
 
 An empty list is a fine answer for a chunk with nothing lasting in it.\
 """

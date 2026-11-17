@@ -58,10 +58,10 @@ async def test_route_existing_alias_new_page_threshold_and_catch_all(env):
     assert ids("people/ana-ruiz") == ["ob-1", "ob-8"]
     assert ids("topics/urban-cycling") == ["ob-2", "ob-3", "ob-4"]
     assert ids("topics/misc") == ["ob-10", "ob-5"]
-    assert ids("health/migraines") == ["ob-6"]
+    assert ids("health/misc") == ["ob-6"]  # one health mention: the catch-all
     assert ids("timeline/2021") == ["ob-7"]
     assert routing.dropped == ["ob-9"]
-    assert set(routing.created) == {"topics/urban-cycling", "topics/misc", "health/migraines",
+    assert set(routing.created) == {"topics/urban-cycling", "topics/misc", "health/misc",
                                     "timeline/2021"}
     page = env.model.page("topics/urban-cycling")
     assert page.title == "urban cycling" and "cycling" in page.aliases
@@ -139,10 +139,10 @@ async def test_route_asks_per_kind_in_batches_and_merges_across_them(env, monkey
 
     monkeypatch.setattr(route_module, "ROUTE_BATCH", 2)
     pending = [ob(1, "health", "knee"), ob(2, "health", "right knee"),
-               ob(3, "health", "knee injury"), ob(4, "topic", "jazz"), ob(5, "topic", "bebop")]
+               ob(3, "health", "patella"), ob(4, "topic", "jazz"), ob(5, "topic", "bebop")]
     env.fake.on("route", RouteResult(decisions=[
         RouteDecision(kind="health", label="right knee", canonical="knee"),
-        RouteDecision(kind="health", label="knee injury", canonical="knee"),
+        RouteDecision(kind="health", label="patella", canonical="knee"),
     ]))
     routing = await _route(env, pending, llm=env.fake)
 
@@ -151,3 +151,39 @@ async def test_route_asks_per_kind_in_batches_and_merges_across_them(env, monkey
     assert all("kind=topic" not in r.messages[-1].text for r in requests
                if "kind=health" in r.messages[-1].text)
     assert sorted(o.id for o in routing.pages["health/knee"]) == ["ob-1", "ob-2", "ob-3"]
+
+
+async def test_route_merges_prefixes_and_near_identical_labels_without_the_model(env):
+    import numpy as np
+
+    class Fixed:
+        """'sommeil' and 'sleep' share a vector; everything else is far apart."""
+
+        name, dim = "fixed", 3
+
+        def embed(self, texts):
+            table = {"sleep": [1, 0, 0], "sommeil": [1, 0, 0], "Sleep": [1, 0, 0]}
+            out = []
+            for n, text in enumerate(texts):
+                out.append(table.get(text, [0, np.cos(n), np.sin(n)]))
+            return np.asarray(out, dtype=np.float32)
+
+    env.model.apply([CreatePage(kind=PageKind.TOPIC, slug="cars", title="Cars")])
+    pending = [ob(1, "health", "sleep"), ob(2, "health", "sommeil"),
+               ob(3, "health", "sleep and lifestyle"), ob(4, "behaviour", "my car"),
+               ob(5, "behaviour", "car"), ob(6, "behaviour", "car repair"),
+               ob(7, "behaviour", "energy at work"), ob(8, "behaviour", "work"),
+               ob(9, "person", "Alex"), ob(10, "person", "Alexandre")]
+    routing2 = await route(env.model, pending, label_counts={}, chat_people=[],
+                           owner=env.config.owner, min_observations=3, llm=None,
+                           embedder=Fixed())
+
+    def ids(key):
+        return sorted(o.id for o in routing2.pages.get(key, []))
+
+    assert ids("health/sleep") == ["ob-1", "ob-2", "ob-3"]
+    assert ids("behaviour/car") == ["ob-4", "ob-5", "ob-6"]
+    # "energy at work" does not start with "work": kept apart, too small for a page
+    assert "ob-7" in ids("behaviour/misc") and "ob-8" in ids("behaviour/misc")
+    # people are never merged this way
+    assert ids("people/misc") == ["ob-10", "ob-9"]

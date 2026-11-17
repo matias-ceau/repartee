@@ -130,7 +130,7 @@ async def test_failed_consolidation_is_retried_and_other_pages_continue(env):
 
     report = await env.distiller().run(stages=["extract", "consolidate"])
     assert report.errors == ["consolidate people/ana-ruiz: timeout"]
-    assert [c.page for c in env.model.claims()] == ["health/sleep"]
+    assert [c.page for c in env.model.claims()] == ["health/misc"]  # one mention: catch-all
 
     env.fake.on(lambda r: r.purpose == "consolidate" and "people/" in r.messages[-1].text,
                 ConsolidationResult())

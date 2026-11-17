@@ -350,7 +350,7 @@ class Distiller:
             self.model, pending, label_counts=dict(counts), chat_people=self._chat_people(),
             owner=self.config.owner,
             min_observations=self.config.distill.min_observations_for_page,
-            llm=self.llm, spend=spend)
+            llm=self.llm, spend=spend, embedder=self.corpus.embedder)
         report.errors.extend(routing.errors)
         report.pages_created += len(routing.created)
         report.observations_dropped += len(routing.dropped)

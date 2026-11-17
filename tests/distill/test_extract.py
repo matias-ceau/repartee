@@ -131,6 +131,30 @@ async def test_confidence_uses_source_prior(env, evidence, expected):
     assert found.confidence == pytest.approx(expected)
 
 
+async def test_own_health_taste_behaviour_need_a_line_by_the_owner(env):
+    env.index(_two_sources())
+
+    def reply(request):
+        ids = ids_in(request)
+        if "wa-1" not in ids:
+            return ExtractionResult()
+        return ExtractionResult(observations=[
+            obs("health", "migraines", "I get migraines.", ["wa-1"]),     # other's line only
+            obs("taste", "jazz", "I like jazz.", ["wa-1"]),
+            obs("behaviour", "lateness", "I run late.", ["wa-1"]),
+            obs("person", "Ana", "Ana gets migraines.", ["wa-1"]),        # kept: about Ana
+            obs("health", "sleep", "I sleep badly.", ["wa-1", "wa-2"]),   # kept: owner's line
+        ])
+
+    env.fake.on("extract", reply)
+    report = await env.distiller().run(stages=["extract"])
+
+    records = ObservationLog(env.home.derived_dir / "observations").records.values()
+    kept = sorted(o.subject for r in records for o in r.observations)
+    assert kept == ["Ana", "sleep"]
+    assert report.observations_dropped == 3
+
+
 async def test_model_confidence_scales_and_is_clamped(env):
     env.index(_two_sources()[2:])
     env.fake.on("extract", ExtractionResult(observations=[

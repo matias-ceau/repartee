@@ -151,7 +151,8 @@ async def test_openai_effort_levels_map_for_openrouter():
     from repartee.llm.openai_client import OPENROUTER_EFFORT
 
     assert set(OPENROUTER_EFFORT) == {"none", "low", "medium", "high", "xhigh", "max"}
-    assert set(OPENROUTER_EFFORT.values()) <= {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
+    allowed = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
+    assert set(OPENROUTER_EFFORT.values()) <= allowed
 
 
 async def test_openai_provider_sends_no_reasoning_and_uses_completion_tokens():

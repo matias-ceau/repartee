@@ -21,6 +21,7 @@ from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
+import numpy as np
 import regex
 from pydantic import BaseModel, Field
 
@@ -37,6 +38,7 @@ from repartee.schema import (
     slugify,
 )
 from repartee.selfmodel import SelfModel
+from repartee.store.embed import Embedder, normalize_rows
 
 log = logging.getLogger(__name__)
 
@@ -157,7 +159,7 @@ def _route_request(model: SelfModel, groups: list[_Group], owner: OwnerConfig) -
         lines.append(f"- kind={group.kind} label={group.display!r} "
                      f"({len(group.observations)}): {example}")
     return LLMRequest(
-        tier="bulk",
+        tier="smart",  # merging labels well matters more than its small cost
         purpose="route",
         system=[SystemBlock(text=fill(ROUTE_SYSTEM, owner.name), cache=True)],
         messages=[Message(role="user", text="\n".join(lines))],
@@ -176,6 +178,7 @@ async def route(
     min_observations: int,
     llm: LLMClient | None,
     spend: Spend | None = None,
+    embedder: Embedder | None = None,
 ) -> Routing:
     """Assign pending observations to pages, creating pages as the rules allow.
 
@@ -214,7 +217,8 @@ async def route(
         group = groups.setdefault((kind, norm), _Group(kind, obs.subject, {norm: obs.subject}))
         group.observations.append(obs)
 
-    merged = await _merge_labels(model, list(groups.values()), owner, llm, routing, spend)
+    clustered = _cluster(model, list(groups.values()), embedder)
+    merged = await _merge_labels(model, clustered, owner, llm, routing, spend)
 
     for group in merged:
         if group.target:
@@ -226,7 +230,10 @@ async def route(
             if group.kind == PageKind.PERSON:
                 in_chat = next(filter(None, (chat_person(label, people)
                                              for label in group.labels.values())), None)
-            if in_chat or group.kind == PageKind.HEALTH or count >= min_observations:
+            needed = min_observations
+            if group.kind == PageKind.HEALTH:  # worth a page sooner, but not one per mention
+                needed = min(2, min_observations)
+            if in_chat or count >= needed:
                 title = in_chat or group.display
                 key = model.resolve(group.kind, title) if in_chat else None
                 aliases = sorted({d for d in group.labels.values() if d != title})
@@ -238,6 +245,106 @@ async def route(
             if key:
                 routing.send(key, obs)
     return routing
+
+
+#: Words left out when comparing labels ("my car" is "car", "sleep and lifestyle" starts
+#: with "sleep").
+_STOPWORDS = {"the", "a", "an", "and", "of", "my", "for", "with", "in", "on", "to", "at",
+              "de", "la", "le", "les", "et", "du", "des", "d", "l", "mon", "ma", "mes",
+              "à", "au", "aux", "en", "pour", "avec"}
+#: Cosine similarity above which two labels of one kind name the same subject. Measured on
+#: real labels with the multilingual MiniLM: same subject across languages scores 0.88 to
+#: 0.99 ("energy"/"énergie"), neighbouring subjects stay under 0.85 ("covid"/"courbatures").
+SAME_SUBJECT = 0.86
+
+
+def _words(label: str) -> tuple[str, ...]:
+    """Content words of a label, crude singulars, in order."""
+    words = [w for w in norm_label(label).split() if w not in _STOPWORDS]
+    return tuple(w[:-1] if len(w) > 3 and w.endswith("s") else w for w in words)
+
+
+class _Sets:
+    """Union-find over 0..n-1."""
+
+    def __init__(self, n: int):
+        self.parent = list(range(n))
+
+    def find(self, i: int) -> int:
+        while self.parent[i] != i:
+            self.parent[i] = self.parent[self.parent[i]]
+            i = self.parent[i]
+        return i
+
+    def union(self, i: int, j: int) -> None:
+        self.parent[self.find(i)] = self.find(j)
+
+
+def _cluster(model: SelfModel, groups: list[_Group], embedder: Embedder | None) -> list[_Group]:
+    """Merge groups that are plainly one subject, without asking the model.
+
+    Two rules, within one kind and never for people (names that look alike can be
+    different people): a label that starts with a shorter label's words joins it ("car
+    repair", "my car" join "car"), and labels the embedding model finds near-identical
+    join each other ("sommeil", "sleep"). A group near-identical to an existing page's
+    title goes to that page.
+    """
+    out: list[_Group] = []
+    by_kind: dict[PageKind, list[_Group]] = {}
+    for group in groups:
+        if group.kind == PageKind.PERSON:
+            out.append(group)
+        else:
+            by_kind.setdefault(group.kind, []).append(group)
+
+    for kind, members in by_kind.items():
+        sets = _Sets(len(members))
+        union, find = sets.union, sets.find
+        words = [_words(g.display) for g in members]
+        index: dict[tuple[str, ...], int] = {}
+        for i, w in enumerate(words):
+            if w and w in index:  # same words ("my car", "car")
+                union(i, index[w])
+            elif w:
+                index[w] = i
+        for i, w in enumerate(words):
+            for n in range(len(w) - 1, 0, -1):  # the longest shorter label it starts with
+                j = index.get(w[:n])
+                if j is not None:
+                    union(i, j)
+                    break
+
+        pages = [p for p in model.pages(kind) if p.key.rsplit("/", 1)[-1] != CATCH_ALL_SLUG]
+        if embedder is not None:
+            labels = [g.display for g in members] + [p.title for p in pages]
+            try:
+                vectors = normalize_rows(np.asarray(embedder.embed(labels)))
+            except Exception as error:  # noqa: BLE001 - grouping works without it
+                log.warning("route: label embedding failed: %s", error)
+                vectors = None
+            if vectors is not None:
+                sims = vectors[: len(members)] @ vectors.T
+                for i in range(len(members)):
+                    for j in range(i + 1, len(members)):
+                        if sims[i, j] >= SAME_SUBJECT:
+                            union(i, j)
+                    if pages:
+                        best = int(np.argmax(sims[i, len(members):]))
+                        if sims[i, len(members) + best] >= SAME_SUBJECT:
+                            members[i].target = members[i].target or pages[best].key
+
+        components: dict[int, list[_Group]] = {}
+        for i, group in enumerate(members):
+            components.setdefault(find(i), []).append(group)
+        for parts in components.values():
+            head = max(parts, key=lambda g: (len(g.observations), -len(g.display)))
+            joined = _join(None, head)
+            joined.target = next((g.target for g in parts if g.target), None)
+            for other in parts:
+                if other is not head:
+                    _join(joined, other)
+            out.append(joined)
+    return out
 
 
 def _worth_asking(model: SelfModel, groups: list[_Group]) -> bool:
@@ -255,7 +362,7 @@ def _batches(model: SelfModel, groups: list[_Group]) -> list[list[_Group]]:
     reply is what makes a weaker model stop short.
     """
     by_kind: dict[PageKind, list[_Group]] = {}
-    for group in groups[:MAX_ROUTE_LABELS]:
+    for group in [g for g in groups if not g.target][:MAX_ROUTE_LABELS]:
         by_kind.setdefault(group.kind, []).append(group)
     out: list[list[_Group]] = []
     for kind_groups in by_kind.values():
@@ -274,7 +381,7 @@ async def _ask(model: SelfModel, batch: list[_Group], owner: OwnerConfig, llm: L
         routing.errors.append(f"route: {error}")
         return []
     if spend is not None:
-        spend.add("bulk", response)
+        spend.add("smart", response)
     if not isinstance(response.parsed, RouteResult):
         routing.errors.append("route: the reply had no decisions")
         return []
@@ -297,6 +404,10 @@ async def _merge_labels(model: SelfModel, groups: list[_Group], owner: OwnerConf
     decisions = {(d.kind.strip().lower(), norm_label(d.label)): d for d in decided}
     out: dict[tuple[PageKind, str], _Group] = {}
     for group in groups:
+        if group.target:  # already matched to a page by its embedding
+            key = (group.kind, "page:" + group.target)
+            out[key] = _join(out.get(key), group)
+            continue
         decision = decisions.get((str(group.kind), norm_label(group.display)))
         if decision and decision.existing_page:
             page = model.page(decision.existing_page.strip().removesuffix(".md"))

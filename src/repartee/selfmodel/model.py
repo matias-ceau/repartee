@@ -36,6 +36,7 @@ from pydantic import BaseModel, ValidationError
 
 from repartee.schema import (
     FACT_SLOTS,
+    PIPELINE_SECTIONS,
     Claim,
     ClaimOp,
     ClaimOrigin,
@@ -50,6 +51,7 @@ from repartee.selfmodel.pages import (
     CORE_KEY,
     QUESTIONS_KEY,
     Page,
+    bare_name,
     clean_text,
     has_facts,
     new_claim_id,
@@ -462,6 +464,9 @@ class SelfModel:
             old = self._disk_pages.get(key)
             if new != old:
                 writes.append((self._page_file(key), new, old, "page", key))
+        for key, old in self._disk_pages.items():
+            if key not in self._pages:  # merged away
+                writes.append((self._page_file(key), None, old, "page", key))
         sidecar_keys = set(self._disk_sidecars) | {c.page for c in self._claims.values()}
         sidecar_keys |= {k for k, v in self._rejected.items() if v}
         sidecar_keys |= {k for k, v in self._facts.items() if v}
@@ -486,6 +491,9 @@ class SelfModel:
         for path, new, _, what, key in sorted(writes, key=lambda w: w[3] != "page"):
             if new is None:
                 path.unlink(missing_ok=True)
+                if what == "page":
+                    self._disk_pages.pop(key, None)
+                    continue
                 self._disk_sidecars.pop(key, None)
                 self._sidecar_baseline.pop(key, None)
                 continue
@@ -509,7 +517,7 @@ class SelfModel:
         page = self._pages.get(key)
         return page.render() if page else None
 
-    def resolve(self, kind: PageKind, label: str) -> str | None:
+    def resolve(self, kind: PageKind, label: str, *, fuzzy: bool = True) -> str | None:
         """Page key for a subject: slug, title or alias, then a close match; None if unsure."""
         want = " ".join(str(label).split()).casefold()
         if not want:
@@ -524,6 +532,8 @@ class SelfModel:
         for tier in tiers:
             if tier:
                 return tier[0] if len(set(tier)) == 1 else None
+        if not fuzzy:
+            return None
         best: dict[str, float] = {}
         for p in pages:
             for name in [p.title, *p.aliases]:
@@ -642,6 +652,41 @@ class SelfModel:
         del self._facts[page][slot]
         if not self._facts[page]:
             del self._facts[page]
+
+    def merge_page(self, source: str, target: str) -> list[str]:
+        """Fold a page into another about the same subject; returns the claim ids moved.
+
+        Claims keep their ids, status and evidence and land in the target section of the
+        same name, else its first one; the source's title and aliases become the target's
+        aliases (a trailing parenthesis such as "(dog)" dropped) and the source page goes.
+        Refused (ValueError) when the source holds anything the owner wrote or key facts.
+        """
+        src, dst = self._pages.get(source), self._pages.get(target)
+        if src is None or dst is None or source == target:
+            raise ValueError(f"cannot merge {source} into {target}")
+        if src.owner_lines() or self._facts.get(source):
+            raise ValueError(f"{source} holds the owner's own text or key facts: merge it by hand")
+        sections = PIPELINE_SECTIONS.get(dst.kind, [])
+        moved = []
+        for line in src.claim_lines():
+            claim = self._claims.get(line.claim_id or "")
+            if claim is None:
+                continue
+            section = line.section if line.section in sections else (
+                sections[0] if sections else line.section)
+            dst.add_claim(section, line.text, claim.id)
+            src.remove_claim(claim.id)
+            claim.page, claim.section = target, section
+            moved.append(claim.id)
+        names = [bare_name(n) for n in [src.title, *src.aliases]]
+        have = {n.casefold() for n in [dst.title, *dst.aliases]}
+        extra = [n for n in dict.fromkeys(names) if n and n.casefold() not in have]
+        if extra:
+            dst.set_property("aliases", [*dst.aliases, *extra])
+        if source in self._rejected:
+            self._rejected.setdefault(target, []).extend(self._rejected.pop(source))
+        del self._pages[source]
+        return moved
 
     def subject_names(self, key: str) -> list[str]:
         """The names a page's subject goes by: title and aliases."""

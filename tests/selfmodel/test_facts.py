@@ -307,3 +307,39 @@ def test_owner_review_of_facts(self_dir):
     assert model.fact(NOOR, "born").status == ClaimStatus.CONFIRMED
     assert model.fact(NOOR, "species") is None and "species" not in read_page(self_dir, NOOR)
     assert model.fact_rejected(NOOR, "species", "dog")
+
+
+def test_merge_page_moves_claims_with_their_status_and_refuses_owner_text(tmp_path):
+    from repartee.schema import ClaimStatus as Status
+    model = SelfModel(tmp_path / "self")
+    model.apply([CreatePage(kind=PageKind.PERSON, slug="pippa", title="Pippa"),
+                 CreatePage(kind=PageKind.TOPIC, slug="pippa", title="Pippa",
+                            aliases=["Pippa (cat)"]),
+                 CreatePage(kind=PageKind.TOPIC, slug="pippas-walks", title="Pippa's walks")])
+    first, kept = (r.claim_id for r in model.apply([
+        AddClaim(page="topics/pippa", section="What I think", text="Pippa is shy.",
+                 evidence=["nt-1"]),
+        AddClaim(page="topics/pippas-walks", section="What I know", text="Pippa walks at 7.",
+                 evidence=["nt-1"])]))
+    model.confirm(first)
+    model.save()
+
+    model = loaded(tmp_path / "self")
+    assert model.merge_page("topics/pippa", PIPPA) == [first]
+    model.save()
+    model = loaded(tmp_path / "self")
+    assert model.page("topics/pippa") is None
+    claim = model.claim(first)
+    assert claim.page == PIPPA and claim.status == Status.CONFIRMED
+    assert not (tmp_path / "self/.claims/topics/pippa.json").exists()
+
+    path = tmp_path / "self/topics/pippas-walks.md"
+    path.write_text(path.read_text() + "My own note about walks.\n")
+    model = loaded(tmp_path / "self")
+    try:
+        model.merge_page("topics/pippas-walks", PIPPA)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("merged a page holding the owner's text")
+    assert model.claim(kept).page == "topics/pippas-walks"

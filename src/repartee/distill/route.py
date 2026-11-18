@@ -38,6 +38,7 @@ from repartee.schema import (
     slugify,
 )
 from repartee.selfmodel import SelfModel
+from repartee.selfmodel.pages import bare_name
 from repartee.store.embed import Embedder, normalize_rows
 
 log = logging.getLogger(__name__)
@@ -86,6 +87,7 @@ class Routing:
     created: list[str] = field(default_factory=list)
     dropped: list[str] = field(default_factory=list)  # observation ids with no possible page
     errors: list[str] = field(default_factory=list)
+    merged: list[tuple[str, str]] = field(default_factory=list)  # (topic page, person page)
 
     def send(self, key: str, obs: Observation) -> None:
         """File one observation under a page key."""
@@ -187,6 +189,7 @@ async def route(
     """
     routing = Routing()
     people = [p for p in chat_people if not owner.is_self(p)]
+    fold_named_topics(model, routing)
     groups: dict[tuple[PageKind, str], _Group] = {}
 
     for obs in pending:
@@ -209,7 +212,8 @@ async def route(
             if key:
                 routing.send(key, obs)
             continue
-        key = model.resolve(kind, obs.subject)
+        key = (named_entity(model, obs.subject) if kind == PageKind.TOPIC else None
+               ) or model.resolve(kind, obs.subject)
         if key:
             routing.send(key, obs)
             continue
@@ -245,6 +249,27 @@ async def route(
             if key:
                 routing.send(key, obs)
     return routing
+
+
+def named_entity(model: SelfModel, label: str) -> str | None:
+    """The person page (someone, or a pet) a topic label names exactly: "Molly (dog)" is
+    the page "Molly". A topic about a named someone belongs on their page."""
+    name = bare_name(label)
+    return model.resolve(PageKind.PERSON, name, fuzzy=False) if name else None
+
+
+def fold_named_topics(model: SelfModel, routing: Routing) -> None:
+    """Merge topic pages that name a person page into it (made before this rule existed)."""
+    for page in model.pages(PageKind.TOPIC):
+        target = named_entity(model, page.title)
+        if target is None:
+            continue
+        try:
+            model.merge_page(page.key, target)
+        except ValueError as err:
+            log.info("route: %s", err)
+            continue
+        routing.merged.append((page.key, target))
 
 
 #: Words left out when comparing labels ("my car" is "car", "sleep and lifestyle" starts

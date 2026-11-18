@@ -109,6 +109,7 @@ class DistillReport(BaseModel):
     ops_refused: int = 0
     questions_added: int = 0
     questions_answered: int = 0  # open questions the confirmed facts settle
+    pages_merged: int = 0  # topic pages folded into the person page they name
     facts_set: int = 0  # key facts set or supported
     claim_ids: list[str] = []  # claims added or changed in this run
     retracted: list[str] = []  # inferred claims withdrawn as false (owner-backed)
@@ -376,6 +377,9 @@ class Distiller:
             llm=self.llm, spend=spend, embedder=self.corpus.embedder)
         report.errors.extend(routing.errors)
         report.pages_created += len(routing.created)
+        for source, target in routing.merged:
+            log.info("distill: merged %s into %s", source, target)
+        report.pages_merged += len(routing.merged)
         report.observations_dropped += len(routing.dropped)
         self._save()
         self.consumed.add(routing.dropped)

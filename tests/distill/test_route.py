@@ -187,3 +187,37 @@ async def test_route_merges_prefixes_and_near_identical_labels_without_the_model
     assert "ob-7" in ids("behaviour/misc") and "ob-8" in ids("behaviour/misc")
     # people are never merged this way
     assert ids("people/misc") == ["ob-10", "ob-9"]
+
+
+async def test_route_sends_a_topic_naming_someone_to_their_page(env):
+    env.model.apply([CreatePage(kind=PageKind.PERSON, slug="pippa", title="Pippa")])
+    routing = await _route(env, [ob(1, "topic", "Pippa (dog)"), ob(2, "topic", "Pippa's vet"),
+                                 ob(3, "topic", "pippa")], llm=None)
+    assert sorted(o.id for o in routing.pages["people/pippa"]) == ["ob-1", "ob-3"]
+    assert "topics/pippa" not in routing.pages
+
+
+async def test_route_folds_an_existing_topic_page_into_the_person_it_names(env):
+    env.model.apply([CreatePage(kind=PageKind.PERSON, slug="pippa", title="Pippa"),
+                     CreatePage(kind=PageKind.TOPIC, slug="pippa", title="Pippa",
+                                aliases=["Pippa (dog)", "Pippa's health"]),
+                     CreatePage(kind=PageKind.TOPIC, slug="cycling", title="Cycling")])
+    env.index([msg("wa-1", OWNER, "Pippa saw the vet", datetime(2024, 3, 2))])
+    from repartee.schema import AddClaim
+    (added,) = env.model.apply([AddClaim(page="topics/pippa", section="What I know",
+                                         text="Pippa saw the vet in March 2024.",
+                                         evidence=["wa-1"])])
+    env.model.save()
+
+    routing = await _route(env, [], llm=None)
+    env.model.save()
+
+    assert routing.merged == [("topics/pippa", "people/pippa")]
+    assert env.model.page("topics/pippa") is None
+    assert not (env.home.self_dir / "topics/pippa.md").exists()
+    assert env.model.page("topics/cycling") is not None
+    claim = env.model.claim(added.claim_id)
+    assert claim.page == "people/pippa" and claim.section == "Who"
+    assert env.model.page("people/pippa").aliases == ["Pippa's health"]
+    text = (env.home.self_dir / "people/pippa.md").read_text()
+    assert f"- Pippa saw the vet in March 2024. ^{added.claim_id}" in text

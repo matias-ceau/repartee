@@ -12,6 +12,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from repartee.distill.pipeline import DistillReport
+from repartee.distill.route import Routing, fold_named_topics
 from repartee.gitops import autocommit
 from repartee.ingest import ingest_home
 from repartee.ingest.base import ParseReport
@@ -33,6 +34,7 @@ class IngestReport(BaseModel):
     reply_pairs: int = 0
     evidence_remapped: int = 0
     pruned: PruneReport = Field(default_factory=PruneReport)
+    merged: list[tuple[str, str]] = Field(default_factory=list)  # topic page -> person page
 
     @property
     def unparsed_lines(self) -> int:
@@ -60,12 +62,14 @@ def run_ingest(rt: Runtime, *, commit: bool = True) -> IngestReport:
 
     remapped = rt.model.remap_evidence(item_stats.remapped) if item_stats.remapped else 0
     pruned = rt.model.prune_dead_evidence(rt.corpus.existing_item_ids)
+    folded = Routing()
+    fold_named_topics(rt.model, folded)
     rt.model.save()
     rt.corpus.sync_claims(rt.model.claims())
 
     report = IngestReport(
         parse=parse_reports, items=item_stats, chunks=chunk_stats, reply_pairs=len(pairs),
-        evidence_remapped=remapped, pruned=pruned,
+        evidence_remapped=remapped, pruned=pruned, merged=folded.merged,
     )
     if commit:
         _commit(rt, "ingest")

@@ -516,6 +516,12 @@ class Page:
             return False
         return not _BLOCK_ID_END.search(content)
 
+    def owner_lines(self) -> list[str]:
+        """Body lines the owner wrote: not blank, not a heading, not a claim line."""
+        claims = {c.line_no for c in self.claim_lines() if c.claim_id}
+        return [c for i, ((c, _), inf) in enumerate(zip(self._lines, self._info(), strict=True))
+                if inf.region == "body" and not inf.heading and c.strip() and i not in claims]
+
     def find_claim(self, claim_id: str) -> int | None:
         """Line index of the first claim line with this id."""
         for cl in self.claim_lines():
@@ -780,6 +786,14 @@ def _closers(lines: list[str]) -> list[str]:
     """Lines that close a fence or comment left open by ``lines``."""
     _, owed = _scan_code(lines)
     return [owed] if owed else []
+
+
+_TRAILING_NOTE = regex.compile(r"\s*\([^()]*\)\s*$")
+
+
+def bare_name(name: str) -> str:
+    """A name without a trailing note in parentheses: "Molly (dog)" is "Molly"."""
+    return " ".join(_TRAILING_NOTE.sub("", str(name)).split())
 
 
 def new_page(kind: PageKind, slug: str, title: str, aliases: Sequence[str] = ()) -> Page:

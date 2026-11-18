@@ -229,6 +229,8 @@ def _ingest(rt: Runtime) -> None:
                    "`repartee status` keeps them.")
     if report.evidence_remapped:
         click.echo(f"{counted(report.evidence_remapped, 'evidence link')} followed moved items.")
+    for source, target in report.merged:
+        click.echo(f"Merged {source} into {target}: they are about the same one.")
     if report.pruned.claims_removed:
         click.echo(f"{counted(len(report.pruned.claims_removed), 'claim')} forgotten: "
                    "the material behind them is gone.")
@@ -303,6 +305,8 @@ def _report_lines(report: DistillReport) -> list[str]:
         f"{counted(len(report.claim_ids), 'claim')} added or changed "
         f"({counted(report.ops_applied, 'change')} applied, {report.ops_refused:,} refused), "
         f"{counted(report.questions_added, 'question')} added.",
+        *([f"{counted(report.pages_merged, 'topic page')} merged into the page of the "
+           "one it names."] if report.pages_merged else []),
         *([f"{counted(report.facts_set, 'key fact')} set or supported."]
           if report.facts_set else []),
         *([f"{counted(len(report.retracted), 'inferred claim')} retracted as false: "

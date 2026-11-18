@@ -366,3 +366,36 @@ def test_assistant_turns_are_never_evidence(tmp_path, owner):
     kept, dropped = clean_observations(picnic, members, result)
     assert dropped == 1
     assert [o.evidence for o in kept] == [[mine.id]]
+
+
+MEMORIES = {"account_uuid": "x", "memory_files": [
+    {"path": "/profile.md", "updated_at": "2026-11-13T10:00:00+00:00",
+     "content": "---\nname: profile\ndescription: Who the user is: a baker in Lyon\n---\n\n"
+                "- [stated] runs a bakery near the river [s:31063d2bd1853bb2]\n"
+                "- [stated] wakes at four [s:9edf57903944e5f9]\n"},
+    {"path": "/topics/empty.md", "content": "---\nname: empty\n---\n"},
+    "not a file",
+]}
+
+
+def test_claude_memories_are_secondhand_notes(tmp_path, owner):
+    items, report = _parse(tmp_path, owner, MEMORIES, name="memories.json")
+    (item,) = items
+    assert item.kind == Kind.NOTE and not item.is_self and item.author == "Claude"
+    assert item.container == "Claude memory" and item.meta["memory"] == "/profile.md"
+    assert item.title == "Who the user is: a baker in Lyon"
+    assert item.text == "- [stated] runs a bakery near the river\n- [stated] wakes at four"
+    assert item.timestamp == datetime(2026, 11, 13, 10, 0)  # naive, as conversations
+    assert report.skipped["malformed_memory"] == 1 and report.skipped["empty"] == 1
+    again, _ = _parse(tmp_path / "other", owner, MEMORIES, name="memories-000.json")
+    assert [i.id for i in again] == [item.id]
+
+    (chunk,) = chunk_items(items, ChunkingConfig())
+    rendered = render_chunk(chunk, items, owner)
+    assert "notes an AI assistant kept about me" in rendered
+    assert "Claude — Who the user is" in rendered
+    result = ExtractionResult(observations=[ExtractedObservation(
+        subject_kind="behaviour", subject="early mornings", text="I wake at four.",
+        evidence=[item.id], confidence=0.8)])
+    kept, dropped = clean_observations(chunk, items, result)
+    assert kept == [] and dropped == 1  # habits must cite a line the owner wrote

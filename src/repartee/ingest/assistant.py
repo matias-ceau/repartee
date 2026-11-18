@@ -18,6 +18,12 @@ Owner turns are often pasted material (code, logs, articles). The item text stay
 complete for search; :func:`pasted_reason` flags turns that are mostly pasted
 (`meta["pasted"]`), and turns with fenced code get `meta["code"]`, so that voice can
 skip the first and strip code from the second (see voice/registers.py).
+
+A Claude memory export (`memories.json`: ``{"memory_files": [{path, content, ...}]}``)
+gives one note per memory file, written by the assistant about the owner: secondhand,
+never the owner's own words (`is_self` false, `meta["memory"]` set), so extraction files
+it as what someone else says and voice never sees it. Project documents are not read:
+they are mostly reference material, and can hold other people's private documents.
 """
 
 from __future__ import annotations
@@ -396,6 +402,61 @@ def parse_conversations(
     return items
 
 
+#: The container every memory note goes in, so they chunk together.
+MEMORY_CONTAINER = "Claude memory"
+_FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n?", re.DOTALL)
+_SESSION_REF = re.compile(r"\s*\[s:[0-9a-f]+\]")
+
+
+def _memory_text(content: str) -> tuple[str, str | None]:
+    """A memory file's body without frontmatter or session refs, and its description."""
+    description = None
+    match = _FRONTMATTER.match(content)
+    if match:
+        for line in match.group(1).splitlines():
+            key, _, value = line.partition(":")
+            if key.strip() == "description" and value.strip():
+                description = value.strip()
+        content = content[match.end():]
+    return _SESSION_REF.sub("", content).strip(), description
+
+
+def parse_memories(data: Any, report: ParseReport, *, label: str,
+                   meta_path: str = "") -> list[Item] | None:
+    """Notes from a Claude memory export; None when the data is not one."""
+    if not isinstance(data, dict) or not isinstance(data.get("memory_files"), list):
+        return None
+    prefix = ID_PREFIX[SOURCE]
+    items: list[Item] = []
+    for seq, entry in enumerate(data["memory_files"]):
+        path, content = (_str(entry.get("path")), _str(entry.get("content"))
+                         ) if isinstance(entry, dict) else (None, None)
+        if not path or not content:
+            report.skip("malformed_memory")
+            continue
+        text, description = _memory_text(content)
+        if not text:
+            report.skip("empty")
+            continue
+        meta: dict[str, Any] = {"role": "assistant", "memory": path}
+        if meta_path:
+            meta["path"] = meta_path
+        items.append(Item(
+            id=make_item_id(prefix, "memory", path),
+            source=SOURCE,
+            kind=Kind.NOTE,
+            container=MEMORY_CONTAINER,
+            author=ASSISTANT_NAMES["claude"],
+            is_self=False,
+            timestamp=_iso(entry.get("updated_at")),
+            text=text,
+            title=description or path,
+            seq=seq,
+            meta=meta,
+        ))
+    return items
+
+
 class AssistantAdapter:
     """Claude.ai and ChatGPT exports: `conversations.json`, loose, in a folder, or zipped."""
 
@@ -429,6 +490,8 @@ class AssistantAdapter:
             report.warn(f"{label}: not valid JSON ({exc.msg}, line {exc.lineno})")
             return []
         items = parse_conversations(decoded, owner, report, label=label, meta_path=meta_path)
+        if items is None:
+            items = parse_memories(decoded, report, label=label, meta_path=meta_path)
         if items is None:
             if name.startswith("conversations"):
                 report.warn(f"{label}: holds no conversations in a known format")

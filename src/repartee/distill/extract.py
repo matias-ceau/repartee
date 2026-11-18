@@ -101,6 +101,10 @@ def render_chunk(chunk: Chunk, items: list[Item], owner: OwnerConfig) -> str:
     elif owner_only:
         head.append("Speakers: \"me\" is me; \"mirror\" is the mirror, whose turns are "
                     "context only and never evidence.")
+    elif any(item.meta.get("memory") for item in items):
+        head.append("These are notes an AI assistant kept about me from our conversations: "
+                    "secondhand. Note what they say as what the assistant noted, never as "
+                    "my own words.")
     elif people:
         head.append(f"Other people in it: {', '.join(people)}")
     head.append(f"Each line starts with its id in square brackets. Lines marked \"me\" were "

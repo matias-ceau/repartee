@@ -220,9 +220,10 @@ class Distiller:
                 cost_usd=estimate_cost(models.smart, r_in, r_out)))
         # new claims from this run feed core and gaps: count them in, up to the core cap
         expected = min(cons_out, core_stage.MAX_CLAIMS * 25) if changes else 0
-        claims = core_stage.select_claims(self.model)
+        said = core_stage.said_claims(self.model, self.statements)
+        claims = core_stage.select_claims(self.model, said=said)
         facts = core_stage.select_facts(self.model)
-        if (claims or facts or changes) and (changes or core_stage.fingerprint(claims, facts)
+        if (claims or facts or changes) and (changes or core_stage.fingerprint(claims, facts, said)
                                              != self.fingerprints.get("core")):
             c_in = estimate_tokens(CORE_SYSTEM) + min(
                 sum(estimate_tokens(c.text) + 12 for c in claims) + expected,
@@ -479,16 +480,17 @@ class Distiller:
     # ------------------------------------------------------------------ core, gaps
 
     async def _core(self, report: DistillReport, spend: Spend, tell: Progress) -> None:
-        claims = core_stage.select_claims(self.model)
+        said = core_stage.said_claims(self.model, self.statements)
+        claims = core_stage.select_claims(self.model, said=said)
         facts = core_stage.select_facts(self.model)
         if not claims and not facts:
             return
-        mark = core_stage.fingerprint(claims, facts)
+        mark = core_stage.fingerprint(claims, facts, said)
         if mark == self.fingerprints.get("core"):
             return
         tell("core", 0, 1)
         responses = await self._complete_many(
-            [core_stage.build_request(self.model, claims, self.config.owner, facts)])
+            [core_stage.build_request(self.model, claims, self.config.owner, facts, said)])
         response = responses[0]
         tell("core", 1, 1)
         if isinstance(response, Exception):

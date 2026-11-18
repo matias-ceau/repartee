@@ -7,6 +7,7 @@ claims and claims from interviews, which the summary must reflect. Then the infe
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable, Collection, Iterable
 
 from pydantic import BaseModel
 
@@ -29,14 +30,23 @@ class CoreResult(BaseModel):
     markdown: str
 
 
-def stated(claim: Claim) -> bool:
-    """True for what the owner said: confirmed claims and claims from their interviews."""
-    return claim.status == ClaimStatus.CONFIRMED or claim.origin == ClaimOrigin.INTERVIEW
+def stated(claim: Claim, said: Collection[str] = ()) -> bool:
+    """True for what the owner said: confirmed claims, claims from their interviews, and
+    claims in ``said`` (ones that cite the owner's own interview or session turn)."""
+    return (claim.status == ClaimStatus.CONFIRMED or claim.origin == ClaimOrigin.INTERVIEW
+            or claim.id in said)
 
 
-def _strength(claim: Claim) -> tuple:
+def said_claims(model: SelfModel, statements: Callable[[Iterable[str]], set[str]]) -> set[str]:
+    """Ids of claims whose evidence includes something the owner stated."""
+    claims = model.claims()
+    mine = statements({e for c in claims for e in c.evidence})
+    return {c.id for c in claims if mine.intersection(c.evidence)}
+
+
+def _strength(claim: Claim, said: Collection[str] = ()) -> tuple:
     confirmed = claim.status == ClaimStatus.CONFIRMED
-    return (not confirmed, claim.origin != ClaimOrigin.INTERVIEW, -claim.confidence,
+    return (not confirmed, not stated(claim, said), -claim.confidence,
             -(claim.updated.timestamp() if claim.updated else 0))
 
 
@@ -53,7 +63,8 @@ def current_claims(model: SelfModel) -> list[Claim]:
             and c.status != ClaimStatus.REJECTED]
 
 
-def select_claims(model: SelfModel, cap: int = MAX_CLAIMS) -> list[Claim]:
+def select_claims(model: SelfModel, cap: int = MAX_CLAIMS,
+                  said: Collection[str] = ()) -> list[Claim]:
     """The strongest current claims, taking turns across page kinds up to the cap."""
     by_kind: dict[PageKind, list[Claim]] = defaultdict(list)
     for claim in current_claims(model):
@@ -61,7 +72,7 @@ def select_claims(model: SelfModel, cap: int = MAX_CLAIMS) -> list[Claim]:
         if page is not None and page.kind in KIND_ORDER:
             by_kind[page.kind].append(claim)
     for claims in by_kind.values():
-        claims.sort(key=_strength)
+        claims.sort(key=lambda c: _strength(c, said))
     chosen: list[Claim] = []
     depth = 0
     while len(chosen) < cap and any(depth < len(v) for v in by_kind.values()):
@@ -72,15 +83,17 @@ def select_claims(model: SelfModel, cap: int = MAX_CLAIMS) -> list[Claim]:
     return chosen
 
 
-def fingerprint(claims: list[Claim], facts: list[Fact] | None = None) -> str:
+def fingerprint(claims: list[Claim], facts: list[Fact] | None = None,
+                said: Collection[str] = ()) -> str:
     """Changes when the selected claims or facts change in a way that matters to the core."""
-    parts = [f"{c.id}|{c.text}|{c.status}|{c.confidence:.2f}" for c in claims]
+    parts = [f"{c.id}|{c.text}|{c.status}|{c.confidence:.2f}"
+             + ("|stated" if c.id in said else "") for c in claims]
     parts += [f"{f.page}:{f.slot}|{f.shown()}|{f.status}" for f in facts or []]
     return stable_hash(*sorted(parts), length=16)
 
 
 def _block(model: SelfModel, claims: list[Claim], facts: list[Fact], *,
-           with_status: bool) -> list[str]:
+           with_status: bool, said: Collection[str] = ()) -> list[str]:
     by_page: dict[str, list[Claim]] = defaultdict(list)
     for claim in claims:
         by_page[claim.page].append(claim)
@@ -98,7 +111,7 @@ def _block(model: SelfModel, claims: list[Claim], facts: list[Fact], *,
         for claim in by_page[key]:
             if claim.status == ClaimStatus.CONFIRMED:
                 mark = "confirmed"
-            elif claim.origin == ClaimOrigin.INTERVIEW:
+            elif claim.origin == ClaimOrigin.INTERVIEW or claim.id in said:
                 mark = "said in an interview"
             else:
                 mark = f"inferred {claim.confidence:.2f}"
@@ -110,13 +123,15 @@ def _block(model: SelfModel, claims: list[Claim], facts: list[Fact], *,
 
 
 def build_request(model: SelfModel, claims: list[Claim], owner: OwnerConfig,
-                  facts: list[Fact] | None = None) -> LLMRequest:
+                  facts: list[Fact] | None = None, said: Collection[str] = ()) -> LLMRequest:
     """The core request: what I stated myself first, then inferred claims, grouped by page."""
     facts = facts or []
     mine = [f for f in facts if f.status == ClaimStatus.CONFIRMED]
     guessed = [f for f in facts if f.status != ClaimStatus.CONFIRMED]
-    first = _block(model, [c for c in claims if stated(c)], mine, with_status=True)
-    second = _block(model, [c for c in claims if not stated(c)], guessed, with_status=True)
+    first = _block(model, [c for c in claims if stated(c, said)], mine, with_status=True,
+                   said=said)
+    second = _block(model, [c for c in claims if not stated(c, said)], guessed,
+                    with_status=True)
     parts = []
     if first:
         parts.append("# What I have stated myself (reflect all of it; it overrides anything "

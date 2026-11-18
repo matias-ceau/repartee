@@ -244,3 +244,25 @@ async def test_consolidate_cannot_retract_on_chat_evidence_alone(env):
                              container="Noor Haddad", seq=3)])
     await env.distiller().run(stages=["extract", "consolidate"])
     assert "- relation: sister (inferred)" in env.fake.calls("consolidate")[-1].messages[-1].text
+
+
+async def test_core_counts_a_claim_citing_an_interview_answer_as_stated(env):
+    env.index(_interview() + [entry("nt-1", "Noor's exam is on monday.",
+                                    ts=datetime(2024, 3, 2))])
+    env.model.apply([CreatePage(kind=PageKind.PERSON, slug="noor-haddad", title="Noor Haddad")])
+    backed, plain = (r.claim_id for r in env.model.apply([
+        AddClaim(page=NOOR, section="Who", text="Noor is a medical student.",
+                 evidence=["nt-1", "iv-1"]),
+        AddClaim(page=NOOR, section="Who", text="Noor has an exam on Monday.",
+                 evidence=["nt-1"])]))
+    env.model.save()
+    assert env.model.claim(backed).status == ClaimStatus.INFERRED  # added by the pipeline
+    env.fake.on("core", CoreResult(markdown="Noor."))
+
+    report = await env.distiller().run(stages=["core"])
+
+    assert report.errors == []
+    core = env.fake.calls("core")[-1].messages[-1].text
+    stated, _, inferred = core.partition("# What was inferred")
+    assert "said in an interview] Noor is a medical student." in stated
+    assert "Noor has an exam on Monday." in inferred

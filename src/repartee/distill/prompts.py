@@ -210,7 +210,12 @@ claim (text), changing only that detail and keeping the rest, in the claim's lan
 keeping.
 Give the slot of the fact that decides it, and a short reason in plain words. Judge only \
 against the facts given, not against what is likely. Return a verdict only for claims to \
-revise or retract; leave out the ones to keep.\
+revise or retract; leave out the ones to keep.
+
+You may also get open questions the mirror means to ask {owner} about this subject. List a \
+question under answered only when the confirmed facts give its whole answer (a question \
+asking whether Pippa is a cat or a dog, when species is cat); a question that asks for \
+more than the facts say stays open. Leave out the questions that stay open.\
 """
 
 GAPS_SYSTEM = _MIRROR_BRIEF + """

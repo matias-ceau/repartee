@@ -108,6 +108,7 @@ class DistillReport(BaseModel):
     ops_applied: int = 0
     ops_refused: int = 0
     questions_added: int = 0
+    questions_answered: int = 0  # open questions the confirmed facts settle
     facts_set: int = 0  # key facts set or supported
     claim_ids: list[str] = []  # claims added or changed in this run
     retracted: list[str] = []  # inferred claims withdrawn as false (owner-backed)
@@ -208,7 +209,7 @@ class Distiller:
                           cost_usd=estimate_cost(models.smart, cons_in, cons_out)),
         ]
         changes = bool(pending or waiting)
-        jobs = [j for j in rectify_stage.plan_jobs(self.model, self.rectify_state) if j.claims]
+        jobs = [j for j in rectify_stage.plan_jobs(self.model, self.rectify_state) if j.needed]
         if jobs:
             r_in = sum(estimate_tokens(RECTIFY_SYSTEM) + REQUEST_OVERHEAD_TOKENS
                        + sum(estimate_tokens(c.text) + 12 for c in j.claims) for j in jobs)
@@ -441,10 +442,10 @@ class Distiller:
         jobs = rectify_stage.plan_jobs(self.model, self.rectify_state)
         if not jobs:
             return
-        asks = [j for j in jobs if j.claims]
+        asks = [j for j in jobs if j.needed]
         for job in jobs:
-            if not job.claims:
-                self.rectify_state.set(job.page, job.mark, job.candidates)
+            if not job.needed:
+                self.rectify_state.set(job.page, job.mark, job.checked)
         tell("rectify", 0, len(asks))
         responses = await self._complete_many(
             [rectify_stage.build_request(self.model, j, self.config.owner) for j in asks])
@@ -464,8 +465,11 @@ class Distiller:
             self._count(report, outcome)
             if outcome.refusals:
                 log.info("distill: rectify %s refused %s", job.page, "; ".join(outcome.refusals))
+            for question_id in rectify_stage.answered(job, result):
+                self.model.resolve_question(question_id)
+                report.questions_answered += 1
             self._save()
-            self.rectify_state.set(job.page, job.mark, job.candidates)
+            self.rectify_state.set(job.page, job.mark, job.checked)
         self.rectify_state.save()
 
     # ------------------------------------------------------------------ core, gaps

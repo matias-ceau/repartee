@@ -308,6 +308,8 @@ def _report_lines(report: DistillReport) -> list[str]:
         *([f"{counted(len(report.retracted), 'inferred claim')} retracted as false: "
            f"{', '.join(report.retracted[:5])}{' ...' if len(report.retracted) > 5 else ''}."]
           if report.retracted else []),
+        *([f"{counted(report.questions_answered, 'open question')} closed: "
+           "your confirmed facts answer them."] if report.questions_answered else []),
         f"Spent about {_usd(report.cost_usd)} on {counted(report.requests, 'request')} "
         f"({report.input_tokens:,} tokens in, {report.output_tokens:,} out).",
     ]

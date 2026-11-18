@@ -13,7 +13,7 @@ from repartee.distill.consolidate import ConsolidationResult, PlannedOp
 from repartee.distill.core import CoreResult
 from repartee.distill.extract import ExtractionResult
 from repartee.distill.gaps import GapsResult
-from repartee.distill.rectify import RectifyResult, Verdict
+from repartee.distill.rectify import Answered, RectifyResult, Verdict
 from repartee.llm import LLMRequest
 from repartee.schema import AddClaim, ClaimStatus, CreatePage, Kind, PageKind
 from tests.distill.helpers import OWNER, entry, ids_in, msg, obs
@@ -166,6 +166,39 @@ async def test_owner_property_edit_revises_the_detail_and_keeps_the_event(env):
     env.fake.on("rectify", RectifyResult())
     await env.distiller().run(stages=["rectify"])
     assert len(env.fake.calls("rectify")) == 2
+
+
+QUESTION_LINE = regex.compile(r"^- (q-[0-9a-f]{8}) (.*)$", regex.MULTILINE)
+
+
+async def test_a_question_the_facts_answer_is_closed(env):
+    _seed_pet(env)
+    settled = env.model.add_question("Is Pippa a cat or a dog?", "people/pippa")
+    still = env.model.add_question("What does Pippa eat in the evening?", "people/pippa")
+    elsewhere = env.model.add_question("Where did I live in 2019?", "timeline/2024")
+    env.model.save()
+    path = env.home.self_dir / "people/pippa.md"
+    path.write_text(path.read_text().replace("updated:", "species: cat\nupdated:"))
+
+    def answer(request: LLMRequest) -> RectifyResult:
+        asked = dict(QUESTION_LINE.findall(request.messages[-1].text))
+        assert set(asked) == {settled.id, still.id}  # only questions about Pippa
+        return RectifyResult(answered=[
+            Answered(question_id=qid, reason="species: cat")
+            for qid, text in asked.items() if "cat or a dog" in text] + [
+            Answered(question_id=elsewhere.id, reason="not asked")])
+
+    env.fake.on("rectify", answer)
+    report = await env.distiller().run(stages=["rectify"])
+
+    assert report.errors == [] and report.questions_answered == 1
+    assert {q.id for q in env.model.questions()} == {still.id, elsewhere.id}
+    assert "- [x] Is Pippa a cat or a dog?" in (
+        env.home.self_dir / "open-questions.md").read_text()
+
+    # checked once: no new request while nothing changes
+    await env.distiller().run(stages=["rectify"])
+    assert len(env.fake.calls("rectify")) == 1
 
 
 async def test_rectify_cannot_touch_claims_it_was_not_asked_about(env):

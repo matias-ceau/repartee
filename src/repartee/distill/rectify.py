@@ -8,6 +8,9 @@ retraction rests on the confirmed fact, a revision cites the fact's evidence.
 
 Incremental: a page is sent again only when its confirmed facts changed since its last
 check, and then with all its claims; otherwise only claims not checked yet are sent.
+
+Open questions about the subject (filed on its page, or naming it) go in the same request:
+one the confirmed facts already answer is ticked, so the owner is not asked twice.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from repartee.distill.state import RectifyState
 from repartee.llm.base import LLMRequest, Message, SystemBlock
 from repartee.schema import Claim, ClaimStatus, Fact, RetractClaim, ReviseClaim, stable_hash
 from repartee.selfmodel import SelfModel
+from repartee.selfmodel.model import Question
 from repartee.selfmodel.pages import has_facts, mentions, value_key
 
 
@@ -37,10 +41,19 @@ class Verdict(BaseModel):
     reason: str = Field(default="", description="Why, in a few plain words.")
 
 
+class Answered(BaseModel):
+    """An open question the confirmed facts already answer."""
+
+    question_id: str
+    reason: str = Field(default="", description="Which fact answers it, in a few words.")
+
+
 class RectifyResult(BaseModel):
-    """Verdicts for the claims to revise or retract; claims left out are kept."""
+    """Verdicts for the claims to revise or retract (claims left out are kept), and the
+    open questions the facts answer (questions left out stay open)."""
 
     verdicts: list[Verdict] = Field(default_factory=list)
+    answered: list[Answered] = Field(default_factory=list)
 
 
 @dataclass
@@ -52,6 +65,17 @@ class Job:
     facts: list[Fact]
     claims: list[Claim]  # to check now (may be empty: nothing new, only record the mark)
     candidates: list[str] = field(default_factory=list)  # every claim concerning the subject
+    questions: list[Question] = field(default_factory=list)  # open, to check now
+
+    @property
+    def checked(self) -> list[str]:
+        """What to record as checked once this job is done: claims and questions."""
+        return [*self.candidates, *(q.id for q in self.questions)]
+
+    @property
+    def needed(self) -> bool:
+        """True when there is something to send."""
+        return bool(self.claims or self.questions)
 
 
 def fact_mark(facts: Sequence[Fact]) -> str:
@@ -69,10 +93,20 @@ def candidates(model: SelfModel, key: str, inferred: Sequence[Claim] | None = No
     return [c for c in inferred if c.page == key or mentions(c.text, names)]
 
 
+def open_questions(model: SelfModel, key: str, waiting: Sequence[Question] | None = None
+                   ) -> list[Question]:
+    """Open questions filed on the page, or naming its subject."""
+    names = model.subject_names(key)
+    if waiting is None:
+        waiting = model.questions()
+    return [q for q in waiting if q.page == key or mentions(q.text, names)]
+
+
 def plan_jobs(model: SelfModel, state: RectifyState) -> list[Job]:
-    """The subjects whose confirmed facts changed or that have unchecked claims."""
+    """The subjects whose confirmed facts changed or that have unchecked claims or questions."""
     jobs = []
     inferred = model.claims(status=ClaimStatus.INFERRED)
+    waiting = model.questions()
     for page in model.pages():
         if not has_facts(page.kind):
             continue
@@ -81,14 +115,16 @@ def plan_jobs(model: SelfModel, state: RectifyState) -> list[Job]:
             continue
         mark = fact_mark(facts)
         found = candidates(model, page.key, inferred)
-        todo = found
+        asked = open_questions(model, page.key, waiting)
+        todo, ask = found, asked
         if state.facts(page.key) == mark:
             done = state.checked(page.key)
             todo = [c for c in found if c.id not in done]
-            if not todo:
+            ask = [q for q in asked if q.id not in done]
+            if not todo and not ask:
                 continue
         jobs.append(Job(page=page.key, mark=mark, facts=facts, claims=todo,
-                        candidates=[c.id for c in found]))
+                        candidates=[c.id for c in found], questions=ask))
     return jobs
 
 
@@ -102,6 +138,10 @@ def build_request(model: SelfModel, job: Job, owner: OwnerConfig) -> LLMRequest:
     lines += ["", "Inferred claims to check:"]
     for claim in job.claims:
         lines.append(f"- {claim.id} (on {claim.page}, {claim.section}) {claim.text}")
+    if not job.claims:
+        lines.append("(none)")
+    lines += ["", "Open questions to check:"]
+    lines += [f"- {q.id} {q.text}" for q in job.questions] or ["(none)"]
     return LLMRequest(
         tier="smart",
         purpose="rectify",
@@ -131,3 +171,9 @@ def to_ops(job: Job, result: RectifyResult) -> list[object]:
             ops.append(ReviseClaim(claim_id=claim_id, text=verdict.text.strip(),
                                    evidence=fact.evidence))
     return ops
+
+
+def answered(job: Job, result: RectifyResult) -> list[str]:
+    """Ids of this job's questions that the facts answer."""
+    asked = {q.id for q in job.questions}
+    return [a.question_id.strip() for a in result.answered if a.question_id.strip() in asked]

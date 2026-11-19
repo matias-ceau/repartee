@@ -1,3 +1,34 @@
-.venv/*
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# Editors and tools
 *.code.workspace
 .aider*
+
+# Credentials
+.env
+.env.*
+.pypirc
+
+# Personal data never belongs in this repository.
+# A Repartee home lives elsewhere (see docs); these catch accidents.
+_chat.txt
+WhatsApp Chat*
+*.whatsapp.txt
+/home/
+/sources/
+/self/
+/interviews/
+/conversations/
+/drafts/
+/derived/
+/evals/
+repartee.yaml
+!examples/persona/**

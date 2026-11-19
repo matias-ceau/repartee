@@ -1,57 +1,27 @@
 [project]
 name = "repartee"
-version = "0.2.0"
-description = "A powerful CLI assistant with memory and context awareness"
+version = "0.3.0"
+description = "A mirror of its owner: memory, behaviour and writing voice, built from their own material"
 readme = "README.md"
 authors = [
     { name = "Matias Ceau", email = "matias@ceau.net" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
-    "aiohappyeyeballs==2.3.7",
-    "aiohttp==3.10.4",
-    "aiosignal==1.3.1",
-    "anthropic>=0.37.1",
-    "attrs==24.2.0",
-    "click==8.1.7",
-    "frozenlist==1.4.1",
-    "google-generativeai>=0.8.3",
-    "idna==3.7",
-    "linkify-it-py==2.0.3",
-    "litellm>=1.51.1",
-    "markdown-it-py==3.0.0",
-    "mdit-py-plugins==0.4.1",
-    "mdurl==0.1.2",
-    "msgpack==1.0.8",
-    "multidict==6.0.5",
-    "networkx>=3.1",
-    "numpy>=1.24.0",
-    "openai>=1.53.0",
-    "prompt-toolkit==3.0.47",
-    "pygments==2.18.0",
-    "pyte==0.8.2",
+    "anthropic>=1.0",
+    "click>=8.1",
+    "fastembed>=0.4",
+    "numpy>=1.26",
+    "openai>=1.60",
+    "pydantic>=2.7",
     "pyyaml>=6.0.1",
-    "python-dotenv>=1.0.0",
-    "requests>=2.32.3",
-    "rich==13.7.1",
-    "tiktoken>=0.5.1",
-    "textual-dev==1.5.1",
-    "textual-terminal==0.3.0",
-    "textual==0.76.0",
-    "typing-extensions==4.12.2",
-    "uc-micro-py==1.0.3",
-    "wcwidth==0.2.13",
-    "yarl==1.9.4",
-    "anyio>=4.4.0",
-    "minio>=7.2.15",
-    "mcp[cli]>=1.9.4",
-    "fastmcp>=1.0",
+    "regex>=2024.5",
+    "rich>=13.7",
+    "textual>=0.80",
 ]
 
 [project.scripts]
-repartee = "repartee.ui.cli:main"
-repartee-chat = "repartee.ui.cli:main"
-repartee-mcp = "fastmcp.__main__:main"
+repartee = "repartee.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -59,9 +29,27 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "ipykernel>=6.29.5",
-    "pip>=24.3.1",
+    "pytest>=8.2",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/repartee"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "live: needs a real model API key or the real embedding model; skipped by default",
+]
+addopts = "-m 'not live'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

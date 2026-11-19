@@ -1,5 +1,3 @@
-"""
-Repartee: A conversational AI assistant integrating multiple language models and retrieval techniques.
-"""
+"""Repartee: a mirror of its owner, built from their own material."""
 
-from .main import main
+__version__ = "0.3.0"
